@@ -1,0 +1,11 @@
+# Input/Output folders (user data)
+input/*.json
+output/*.json
+
+# Keep folders but ignore contents
+!input/.gitkeep
+!output/.gitkeep
+
+# OS files
+.DS_Store
+Thumbs.db

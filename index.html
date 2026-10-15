@@ -1,0 +1,707 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>JSON Diff</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #0d1117;
+      color: #c9d1d9;
+      min-height: 100vh;
+    }
+
+    .header {
+      background: #161b22;
+      padding: 12px 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid #30363d;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+    .header h1 { font-size: 16px; font-weight: 600; color: #f0f6fc; }
+    .header-actions { display: flex; gap: 10px; }
+    .btn {
+      background: #238636;
+      color: white;
+      border: none;
+      padding: 8px 16px;
+      font-size: 13px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-weight: 500;
+    }
+    .btn:hover { background: #2ea043; }
+    .btn-secondary { background: #21262d; border: 1px solid #30363d; }
+    .btn-secondary:hover { background: #30363d; }
+
+    /* Foldable */
+    .foldable { border-bottom: 1px solid #30363d; }
+    .fold-header {
+      background: #161b22;
+      padding: 10px 20px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      cursor: pointer;
+      user-select: none;
+    }
+    .fold-header:hover { background: #1c2128; }
+    .fold-icon { font-size: 10px; color: #8b949e; transition: transform 0.2s; }
+    .foldable.collapsed .fold-icon { transform: rotate(-90deg); }
+    .foldable.collapsed .fold-content { display: none; }
+    .fold-title { font-size: 13px; font-weight: 500; color: #c9d1d9; }
+
+    .input-section { display: flex; }
+    .input-panel { flex: 1; background: #0d1117; border-right: 1px solid #30363d; }
+    .input-panel:last-child { border-right: none; }
+    .input-panel-header {
+      padding: 8px 12px;
+      background: #161b22;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid #30363d;
+    }
+    .input-panel-header span { font-size: 12px; color: #8b949e; }
+    .file-btn {
+      background: #21262d;
+      border: 1px solid #30363d;
+      color: #c9d1d9;
+      padding: 4px 10px;
+      font-size: 11px;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    .file-btn:hover { background: #30363d; }
+    .input-panel textarea {
+      width: 100%;
+      height: 160px;
+      background: #0d1117;
+      color: #c9d1d9;
+      border: none;
+      padding: 12px;
+      font-family: 'SF Mono', 'Monaco', 'Menlo', monospace;
+      font-size: 12px;
+      resize: vertical;
+      outline: none;
+    }
+    .input-panel textarea::placeholder { color: #484f58; }
+    .input-panel input[type="file"] { display: none; }
+
+    /* Floating Nav */
+    .floating-nav {
+      position: fixed;
+      right: 24px;
+      top: 50%;
+      transform: translateY(-50%);
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      z-index: 200;
+    }
+    .nav-btn {
+      width: 54px;
+      height: 54px;
+      border-radius: 50%;
+      border: 2px solid rgba(255,255,255,0.1);
+      cursor: pointer;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      font-weight: 600;
+      transition: transform 0.2s, border-color 0.2s;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+    }
+    .nav-btn:hover { transform: scale(1.1); border-color: rgba(255,255,255,0.3); }
+    .nav-btn .count { font-size: 18px; line-height: 1; }
+    .nav-btn .label { font-size: 8px; margin-top: 2px; text-transform: uppercase; opacity: 0.9; }
+    .nav-btn-removed { background: #da3633; color: white; }
+    .nav-btn-modified { background: #9e6a03; color: white; }
+    .nav-btn-added { background: #238636; color: white; }
+    .nav-btn.disabled { opacity: 0.25; pointer-events: none; }
+
+    /* Diff Section */
+    .diff-section { display: none; }
+    .diff-section.visible { display: block; }
+
+    .diff-header {
+      background: #161b22;
+      padding: 12px 20px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 12px;
+      border-bottom: 1px solid #30363d;
+    }
+    .diff-stats { display: flex; gap: 16px; font-size: 13px; }
+    .stat { display: flex; align-items: center; gap: 6px; }
+    .stat-dot { width: 12px; height: 12px; border-radius: 50%; }
+    .stat-removed .stat-dot { background: #da3633; }
+    .stat-added .stat-dot { background: #238636; }
+    .stat-modified .stat-dot { background: #9e6a03; }
+
+    .legend { display: flex; gap: 16px; font-size: 11px; color: #8b949e; }
+    .legend-item { display: flex; align-items: center; gap: 6px; }
+    .legend-color { width: 14px; height: 14px; border-radius: 3px; }
+    .legend-removed { background: rgba(248,81,73,0.4); }
+    .legend-added { background: rgba(63,185,80,0.4); }
+    .legend-modified { background: rgba(210,153,34,0.4); }
+
+    /* Diff Panels */
+    .diff-container { display: flex; }
+    .diff-panel {
+      flex: 1;
+      background: #0d1117;
+      overflow: auto;
+      max-height: 65vh;
+      border-right: 1px solid #30363d;
+    }
+    .diff-panel:last-child { border-right: none; }
+    .diff-panel-header {
+      padding: 8px 12px;
+      background: #161b22;
+      font-size: 12px;
+      color: #8b949e;
+      border-bottom: 1px solid #30363d;
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+    .diff-content {
+      font-family: 'SF Mono', 'Monaco', 'Menlo', monospace;
+      font-size: 12px;
+      line-height: 20px;
+    }
+    .diff-line {
+      display: flex;
+      min-height: 20px;
+    }
+    .line-num {
+      min-width: 50px;
+      padding: 0 12px 0 8px;
+      text-align: right;
+      color: #484f58;
+      background: rgba(0,0,0,0.2);
+      user-select: none;
+      flex-shrink: 0;
+    }
+    .line-content {
+      flex: 1;
+      padding: 0 16px;
+      white-space: pre;
+    }
+
+    /* Foldable JSON lines */
+    .fold-toggle {
+      display: inline-block;
+      width: 20px;
+      cursor: pointer;
+      user-select: none;
+      color: #6e7681;
+      text-align: center;
+      font-size: 10px;
+      transition: transform 0.15s;
+    }
+    .fold-toggle:hover { color: #58a6ff; }
+    .diff-line.collapsed .fold-toggle { transform: rotate(-90deg); }
+    .diff-line.collapsed .line-rest { display: none; }
+    .diff-line.collapsed .collapsed-preview { display: inline; }
+    .collapsed-preview { display: none; font-style: italic; opacity: 0.6; }
+    .hidden-by-fold { display: none !important; }
+
+    /* Highlighting - Strong colors */
+    .diff-line.removed {
+      background: rgba(248,81,73,0.15);
+    }
+    .diff-line.removed .line-num {
+      background: rgba(248,81,73,0.3);
+      color: #ff7b72;
+    }
+    .diff-line.removed .line-content {
+      color: #ffa198;
+    }
+
+    .diff-line.added {
+      background: rgba(63,185,80,0.15);
+    }
+    .diff-line.added .line-num {
+      background: rgba(63,185,80,0.3);
+      color: #3fb950;
+    }
+    .diff-line.added .line-content {
+      color: #7ee787;
+    }
+
+    .diff-line.modified {
+      background: rgba(210,153,34,0.2);
+    }
+    .diff-line.modified .line-num {
+      background: rgba(210,153,34,0.35);
+      color: #d29922;
+    }
+    .diff-line.modified .line-content {
+      color: #e3b341;
+    }
+
+    .diff-line.highlight {
+      outline: 2px solid #58a6ff;
+      outline-offset: -2px;
+    }
+
+    .no-diff {
+      text-align: center;
+      padding: 50px 20px;
+      color: #3fb950;
+    }
+    .no-diff-icon { font-size: 48px; margin-bottom: 12px; }
+    .no-diff h2 { font-size: 20px; margin-bottom: 6px; font-weight: 500; }
+    .no-diff p { color: #8b949e; }
+
+    .error-msg {
+      background: rgba(248,81,73,0.1);
+      border: 1px solid #da3633;
+      color: #ff7b72;
+      padding: 12px 20px;
+      margin: 16px;
+      border-radius: 6px;
+      font-size: 13px;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>JSON Diff</h1>
+    <div class="header-actions">
+      <button class="btn" onclick="compare()">Compare</button>
+      <button class="btn btn-secondary" onclick="clearAll()">Clear</button>
+    </div>
+  </div>
+
+  <div class="foldable" id="inputFoldable">
+    <div class="fold-header" onclick="toggleFold('inputFoldable')">
+      <span class="fold-icon">▼</span>
+      <span class="fold-title">Input JSON</span>
+    </div>
+    <div class="fold-content">
+      <div class="input-section">
+        <div class="input-panel">
+          <div class="input-panel-header">
+            <span>Left (Original)</span>
+            <button class="file-btn" onclick="document.getElementById('file1').click()">Upload</button>
+            <input type="file" id="file1" accept=".json" onchange="handleFile(1, this)">
+          </div>
+          <textarea id="json1" placeholder='{"name": "John", "age": 30}'></textarea>
+        </div>
+        <div class="input-panel">
+          <div class="input-panel-header">
+            <span>Right (Modified)</span>
+            <button class="file-btn" onclick="document.getElementById('file2').click()">Upload</button>
+            <input type="file" id="file2" accept=".json" onchange="handleFile(2, this)">
+          </div>
+          <textarea id="json2" placeholder='{"name": "Jane", "age": 25}'></textarea>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="floating-nav" id="floatingNav" style="display: none;">
+    <button class="nav-btn nav-btn-removed disabled" id="navRemoved" onclick="jumpTo('removed')">
+      <span class="count" id="countRemoved">0</span>
+      <span class="label">Removed</span>
+    </button>
+    <button class="nav-btn nav-btn-modified disabled" id="navModified" onclick="jumpTo('modified')">
+      <span class="count" id="countModified">0</span>
+      <span class="label">Modified</span>
+    </button>
+    <button class="nav-btn nav-btn-added disabled" id="navAdded" onclick="jumpTo('added')">
+      <span class="count" id="countAdded">0</span>
+      <span class="label">Added</span>
+    </button>
+  </div>
+
+  <div class="diff-section" id="diffSection">
+    <div class="diff-header">
+      <div class="diff-stats">
+        <div class="stat stat-removed"><div class="stat-dot"></div><span id="statRemoved">0 lines removed</span></div>
+        <div class="stat stat-modified"><div class="stat-dot"></div><span id="statModified">0 lines modified</span></div>
+        <div class="stat stat-added"><div class="stat-dot"></div><span id="statAdded">0 lines added</span></div>
+      </div>
+      <div class="legend">
+        <div class="legend-item"><div class="legend-color legend-removed"></div>Removed</div>
+        <div class="legend-item"><div class="legend-color legend-modified"></div>Modified</div>
+        <div class="legend-item"><div class="legend-color legend-added"></div>Added</div>
+      </div>
+    </div>
+
+    <div class="foldable" id="diffFoldable">
+      <div class="fold-header" onclick="toggleFold('diffFoldable')">
+        <span class="fold-icon">▼</span>
+        <span class="fold-title">Diff Result</span>
+      </div>
+      <div class="fold-content">
+        <div class="diff-container">
+          <div class="diff-panel" id="leftPanel">
+            <div class="diff-panel-header">Original (Left)</div>
+            <div class="diff-content" id="leftDiff"></div>
+          </div>
+          <div class="diff-panel" id="rightPanel">
+            <div class="diff-panel-header">Modified (Right)</div>
+            <div class="diff-content" id="rightDiff"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="output"></div>
+
+  <script>
+    let jumpIndex = { removed: 0, modified: 0, added: 0 };
+
+    function toggleFold(id) {
+      document.getElementById(id).classList.toggle('collapsed');
+    }
+
+    function handleFile(num, input) {
+      const file = input.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (e) => document.getElementById(`json${num}`).value = e.target.result;
+      reader.readAsText(file);
+    }
+
+    function clearAll() {
+      document.getElementById('json1').value = '';
+      document.getElementById('json2').value = '';
+      document.getElementById('diffSection').classList.remove('visible');
+      document.getElementById('floatingNav').style.display = 'none';
+      document.getElementById('output').innerHTML = '';
+      document.getElementById('inputFoldable').classList.remove('collapsed');
+    }
+
+    function compare() {
+      const output = document.getElementById('output');
+      const json1Text = document.getElementById('json1').value.trim();
+      const json2Text = document.getElementById('json2').value.trim();
+
+      if (!json1Text || !json2Text) {
+        output.innerHTML = '<div class="error-msg">Please provide JSON in both panels</div>';
+        document.getElementById('diffSection').classList.remove('visible');
+        document.getElementById('floatingNav').style.display = 'none';
+        return;
+      }
+
+      let obj1, obj2;
+      try {
+        obj1 = JSON.parse(json1Text);
+      } catch (e) {
+        output.innerHTML = `<div class="error-msg">Left JSON error: ${e.message}</div>`;
+        return;
+      }
+      try {
+        obj2 = JSON.parse(json2Text);
+      } catch (e) {
+        output.innerHTML = `<div class="error-msg">Right JSON error: ${e.message}</div>`;
+        return;
+      }
+
+      output.innerHTML = '';
+
+      // Format consistently
+      const leftLines = JSON.stringify(obj1, null, 2).split('\n');
+      const rightLines = JSON.stringify(obj2, null, 2).split('\n');
+
+      // Compute LCS-based diff
+      const { leftMarks, rightMarks, stats } = computeDiff(leftLines, rightLines);
+
+      if (stats.removed === 0 && stats.added === 0 && stats.modified === 0) {
+        document.getElementById('diffSection').classList.remove('visible');
+        document.getElementById('floatingNav').style.display = 'none';
+        output.innerHTML = `
+          <div class="no-diff">
+            <div class="no-diff-icon">✓</div>
+            <h2>Identical</h2>
+            <p>Both JSON objects are the same.</p>
+          </div>`;
+        return;
+      }
+
+      // Update stats
+      document.getElementById('statRemoved').textContent = `${stats.removed} removed`;
+      document.getElementById('statModified').textContent = `${stats.modified} modified`;
+      document.getElementById('statAdded').textContent = `${stats.added} added`;
+
+      document.getElementById('countRemoved').textContent = stats.removed;
+      document.getElementById('countModified').textContent = stats.modified;
+      document.getElementById('countAdded').textContent = stats.added;
+
+      document.getElementById('navRemoved').classList.toggle('disabled', stats.removed === 0);
+      document.getElementById('navModified').classList.toggle('disabled', stats.modified === 0);
+      document.getElementById('navAdded').classList.toggle('disabled', stats.added === 0);
+
+      jumpIndex = { removed: 0, modified: 0, added: 0 };
+
+      // Render
+      renderPanel('leftDiff', leftLines, leftMarks);
+      renderPanel('rightDiff', rightLines, rightMarks);
+
+      document.getElementById('diffSection').classList.add('visible');
+      document.getElementById('floatingNav').style.display = 'flex';
+      document.getElementById('inputFoldable').classList.add('collapsed');
+
+      // Sync scroll
+      syncScroll('leftPanel', 'rightPanel');
+    }
+
+    function computeDiff(leftLines, rightLines) {
+      const leftMarks = new Array(leftLines.length).fill(null);
+      const rightMarks = new Array(rightLines.length).fill(null);
+      const stats = { removed: 0, added: 0, modified: 0 };
+
+      // Create sets of trimmed lines for quick lookup
+      const leftTrimmed = leftLines.map(l => l.trim());
+      const rightTrimmed = rightLines.map(l => l.trim());
+      const leftSet = new Set(leftTrimmed);
+      const rightSet = new Set(rightTrimmed);
+
+      // Skip structural braces
+      const isStructural = (line) => /^[\{\}\[\],]*$/.test(line.trim());
+
+      // Extract key-value pairs with full path context
+      const leftKV = extractKeyValuesWithPath(leftLines);
+      const rightKV = extractKeyValuesWithPath(rightLines);
+
+      // Build maps: fullPath -> {lineIdx, value}
+      const leftMap = new Map();
+      const rightMap = new Map();
+      leftKV.forEach((kv, idx) => { if (kv) leftMap.set(kv.fullPath, { idx, value: kv.value }); });
+      rightKV.forEach((kv, idx) => { if (kv) rightMap.set(kv.fullPath, { idx, value: kv.value }); });
+
+      // Compare using full paths
+      for (const [path, leftInfo] of leftMap) {
+        if (rightMap.has(path)) {
+          const rightInfo = rightMap.get(path);
+          if (leftInfo.value !== rightInfo.value) {
+            // Modified - same path, different value
+            leftMarks[leftInfo.idx] = 'modified';
+            rightMarks[rightInfo.idx] = 'modified';
+            stats.modified++;
+          }
+          // else: identical, no mark
+        } else {
+          // Removed - path only in left
+          leftMarks[leftInfo.idx] = 'removed';
+          stats.removed++;
+        }
+      }
+
+      // Find added (paths only in right)
+      for (const [path, rightInfo] of rightMap) {
+        if (!leftMap.has(path)) {
+          rightMarks[rightInfo.idx] = 'added';
+          stats.added++;
+        }
+      }
+
+      return { leftMarks, rightMarks, stats };
+    }
+
+    function extractKeyValuesWithPath(lines) {
+      const result = new Array(lines.length).fill(null);
+      const pathStack = [];
+      let arrayIndexStack = [];
+
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
+        const trimmed = line.trim();
+
+        // Track nesting
+        if (trimmed === '{' || trimmed === '[') {
+          if (trimmed === '[') arrayIndexStack.push(0);
+          continue;
+        }
+
+        if (trimmed.startsWith('}') || trimmed.startsWith(']')) {
+          if (trimmed.startsWith(']') && arrayIndexStack.length > 0) {
+            arrayIndexStack.pop();
+          }
+          if (pathStack.length > 0) pathStack.pop();
+          continue;
+        }
+
+        // Key-value pair
+        const kvMatch = trimmed.match(/^"([^"]+)"\s*:\s*(.+)$/);
+        if (kvMatch) {
+          const key = kvMatch[1];
+          let value = kvMatch[2].replace(/,\s*$/, '').trim();
+          const fullPath = pathStack.length > 0 ? pathStack.join('.') + '.' + key : key;
+
+          // Check if value opens a nested structure
+          if (value === '{' || value === '[') {
+            pathStack.push(key);
+            if (value === '[') arrayIndexStack.push(0);
+            // Don't record this line as a KV pair (it's structural)
+          } else {
+            result[i] = { key, value, fullPath };
+          }
+        }
+        // Array element (primitive)
+        else if (arrayIndexStack.length > 0 && trimmed && !trimmed.startsWith('{') && !trimmed.startsWith('[')) {
+          const idx = arrayIndexStack[arrayIndexStack.length - 1];
+          const value = trimmed.replace(/,\s*$/, '');
+          const fullPath = pathStack.join('.') + '.' + idx;
+          result[i] = { key: String(idx), value, fullPath };
+          arrayIndexStack[arrayIndexStack.length - 1]++;
+        }
+        // Array element opening object/array
+        else if (arrayIndexStack.length > 0 && (trimmed === '{' || trimmed === '[')) {
+          const idx = arrayIndexStack[arrayIndexStack.length - 1];
+          pathStack.push(String(idx));
+          arrayIndexStack[arrayIndexStack.length - 1]++;
+          if (trimmed === '[') arrayIndexStack.push(0);
+        }
+      }
+
+      return result;
+    }
+
+    function renderPanel(id, lines, marks) {
+      // Find matching brackets for folding
+      const foldInfo = computeFoldRanges(lines);
+
+      let html = '';
+      for (let i = 0; i < lines.length; i++) {
+        const cls = marks[i] || '';
+        const line = lines[i];
+        const foldData = foldInfo[i];
+
+        if (foldData && foldData.canFold) {
+          // Line that can be folded (has { or [)
+          const content = line.trimEnd();
+          const preview = foldData.isArray ? ' [...]' : ' {...}';
+          const keyPart = content.replace(/[\{\[]\s*$/, '');
+
+          html += `<div class="diff-line ${cls}" data-line="${i}" data-fold-end="${foldData.endLine}">
+            <div class="line-num">${i + 1}</div>
+            <div class="line-content"><span class="fold-toggle" onclick="toggleJsonFold(this, '${id}')">▼</span><span class="line-rest">${escapeHtml(content)}</span><span class="collapsed-preview">${escapeHtml(keyPart)}${preview}</span></div>
+          </div>`;
+        } else {
+          html += `<div class="diff-line ${cls}" data-line="${i}">
+            <div class="line-num">${i + 1}</div>
+            <div class="line-content"><span class="fold-toggle" style="visibility:hidden">▼</span>${escapeHtml(lines[i])}</div>
+          </div>`;
+        }
+      }
+      document.getElementById(id).innerHTML = html;
+    }
+
+    function computeFoldRanges(lines) {
+      const result = {};
+      const stack = [];
+
+      for (let i = 0; i < lines.length; i++) {
+        const trimmed = lines[i].trim();
+
+        // Check for opening braces/brackets at end of line
+        if (trimmed.endsWith('{') || trimmed.endsWith('[')) {
+          const isArray = trimmed.endsWith('[');
+          stack.push({ startLine: i, isArray });
+        }
+
+        // Check for closing braces/brackets
+        if (trimmed.startsWith('}') || trimmed.startsWith(']')) {
+          if (stack.length > 0) {
+            const start = stack.pop();
+            // Only allow folding if there's content to fold
+            if (i > start.startLine + 1) {
+              result[start.startLine] = {
+                canFold: true,
+                endLine: i,
+                isArray: start.isArray
+              };
+            }
+          }
+        }
+      }
+
+      return result;
+    }
+
+    function toggleJsonFold(toggleEl, panelId) {
+      const lineEl = toggleEl.closest('.diff-line');
+      const startLine = parseInt(lineEl.dataset.line);
+      const endLine = parseInt(lineEl.dataset.foldEnd);
+      const panel = document.getElementById(panelId);
+      const allLines = panel.querySelectorAll('.diff-line');
+
+      const isCollapsing = !lineEl.classList.contains('collapsed');
+      lineEl.classList.toggle('collapsed');
+
+      // Show/hide lines between start and end
+      for (let i = startLine + 1; i <= endLine; i++) {
+        const el = allLines[i];
+        if (el) {
+          if (isCollapsing) {
+            el.classList.add('hidden-by-fold');
+          } else {
+            el.classList.remove('hidden-by-fold');
+            // If this line was also collapsed, keep its children hidden
+            if (el.classList.contains('collapsed')) {
+              const nestedEnd = parseInt(el.dataset.foldEnd);
+              for (let j = i + 1; j <= nestedEnd && j < allLines.length; j++) {
+                allLines[j].classList.add('hidden-by-fold');
+              }
+              i = nestedEnd;
+            }
+          }
+        }
+      }
+    }
+
+    function syncScroll(id1, id2) {
+      const el1 = document.getElementById(id1);
+      const el2 = document.getElementById(id2);
+      let syncing = false;
+      el1.onscroll = () => { if (!syncing) { syncing = true; el2.scrollTop = el1.scrollTop; syncing = false; }};
+      el2.onscroll = () => { if (!syncing) { syncing = true; el1.scrollTop = el2.scrollTop; syncing = false; }};
+    }
+
+    function jumpTo(type) {
+      const panelId = type === 'removed' ? 'leftPanel' : 'rightPanel';
+      const diffId = type === 'removed' ? 'leftDiff' : 'rightDiff';
+      const elements = document.querySelectorAll(`#${diffId} .diff-line.${type}:not(.hidden-by-fold)`);
+
+      if (elements.length === 0) return;
+
+      document.querySelectorAll('.diff-line.highlight').forEach(el => el.classList.remove('highlight'));
+
+      const idx = jumpIndex[type] % elements.length;
+      const el = elements[idx];
+      const panel = document.getElementById(panelId);
+
+      // Center the element in the visible area
+      const panelHeight = panel.clientHeight;
+      const elTop = el.offsetTop;
+      const elHeight = el.offsetHeight;
+      const scrollTo = elTop - (panelHeight / 2) + (elHeight / 2);
+
+      panel.scrollTop = Math.max(0, scrollTo);
+      el.classList.add('highlight');
+      setTimeout(() => el.classList.remove('highlight'), 2000);
+      jumpIndex[type] = (idx + 1) % elements.length;
+    }
+
+    function escapeHtml(str) {
+      return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    }
+  </script>
+</body>
+</html>
