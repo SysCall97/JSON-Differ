@@ -274,12 +274,96 @@
       border-radius: 6px;
       font-size: 13px;
     }
+
+    /* Tree editor */
+    .panel-actions { display: flex; gap: 8px; align-items: center; }
+    .mode-toggle { display: flex; border: 1px solid #30363d; border-radius: 4px; overflow: hidden; }
+    .mode-toggle button {
+      background: #0d1117; color: #8b949e; border: none; padding: 4px 10px;
+      font-size: 11px; cursor: pointer;
+    }
+    .mode-toggle button + button { border-left: 1px solid #30363d; }
+    .mode-toggle button.active { background: #30363d; color: #f0f6fc; }
+    .undo-btn { display: none; }
+    .undo-btn:disabled { opacity: 0.4; cursor: default; }
+    .input-panel.tree-mode .undo-btn { display: inline-block; }
+    .tree-error {
+      display: none; padding: 6px 12px; font-size: 12px; color: #ff7b72;
+      background: rgba(248,81,73,0.1); border-bottom: 1px solid #30363d;
+    }
+    .tree-error.visible { display: block; }
+    .tree-view {
+      display: none; height: 260px; min-height: 120px; overflow: auto; resize: vertical;
+      padding: 8px 0; font-family: 'SF Mono', 'Monaco', 'Menlo', monospace;
+      font-size: 12px; line-height: 22px;
+    }
+    .input-panel.tree-mode textarea { display: none; }
+    .input-panel.tree-mode .tree-view { display: block; }
+    .t-line { display: flex; align-items: center; white-space: pre; padding-right: 12px; }
+    .t-line:hover { background: rgba(110,118,129,0.1); }
+    .t-line.t-target { background: rgba(56,139,253,0.15); }
+    .t-line.t-flash { animation: tflash 1.4s ease-out; }
+    @keyframes tflash { from { background: rgba(63,185,80,0.45); } to { background: transparent; } }
+    .t-gutter { width: 24px; flex-shrink: 0; text-align: center; }
+    .t-fold { cursor: pointer; color: #6e7681; font-size: 10px; user-select: none; display: inline-block; }
+    .t-fold:hover { color: #58a6ff; }
+    .t-fold.closed { transform: rotate(-90deg); }
+    .t-key { color: #79c0ff; }
+    .t-str { color: #a5d6ff; }
+    .t-num { color: #ffa657; }
+    .t-lit { color: #ff7b72; }
+    .t-preview { color: #6e7681; font-style: italic; }
+    .dup-btn {
+      width: 18px; height: 18px; margin-left: 8px; flex-shrink: 0;
+      border-radius: 50%; border: 1px solid #2ea043; background: transparent;
+      color: #3fb950; font-size: 14px; line-height: 15px; padding: 0;
+      cursor: pointer; opacity: 0.3; transition: opacity 0.15s, background 0.15s;
+    }
+    .t-line:hover .dup-btn { opacity: 1; }
+    .dup-btn:hover { background: #238636; color: #fff; opacity: 1; }
+    .del-btn { margin-left: 4px; border-color: #da3633; color: #f85149; }
+    .del-btn:hover { background: #da3633; color: #fff; }
+    .t-edit { cursor: text; border-radius: 3px; }
+    .t-edit:hover { outline: 1px dashed #484f58; outline-offset: 1px; }
+    .t-input {
+      background: #0d1117; color: #f0f6fc; border: 1px solid #58a6ff; border-radius: 3px;
+      font: inherit; padding: 0 4px; height: 20px; min-width: 3ch; outline: none;
+    }
+    .t-input.invalid { border-color: #f85149; }
+    .t-line.t-target-del { background: rgba(248,81,73,0.18); }
+    /* App modes */
+    .header-left { display: flex; align-items: center; gap: 16px; }
+    .app-mode { display: flex; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; padding: 2px; }
+    .app-mode button {
+      background: transparent; color: #8b949e; border: none; padding: 5px 14px;
+      font-size: 12px; font-weight: 500; border-radius: 4px; cursor: pointer;
+    }
+    .app-mode button:hover { color: #c9d1d9; }
+    .app-mode button.active { background: #30363d; color: #f0f6fc; }
+    body.mode-tree .compare-only,
+    body.mode-tree #inputFoldable,
+    body.mode-tree #diffSection,
+    body.mode-tree #output,
+    body.mode-tree #floatingNav { display: none !important; }
+    body:not(.mode-tree) .tree-only { display: none !important; }
+    .tree-section .input-panel { border-right: none; }
+    .tree-section .input-panel-header { flex-wrap: wrap; gap: 8px; }
+    .tree-section .tree-view,
+    .tree-section textarea { height: calc(100vh - 110px); resize: none; }
+    .tree-section .input-panel-header input[type="file"] { display: none; }
+    .download-btn { padding: 4px 12px; font-size: 11px; border-radius: 4px; }
   </style>
 </head>
 <body>
   <div class="header">
-    <h1>JSON Diff</h1>
-    <div class="header-actions">
+    <div class="header-left">
+      <h1>JSON Diff</h1>
+      <div class="app-mode">
+        <button id="appModeCompare" class="active" onclick="setAppMode('compare')">Compare</button>
+        <button id="appModeTree" onclick="setAppMode('tree')">Tree Editor</button>
+      </div>
+    </div>
+    <div class="header-actions compare-only">
       <button class="btn" onclick="compare()">Compare</button>
       <button class="btn btn-secondary" onclick="clearAll()">Clear</button>
     </div>
@@ -295,7 +379,9 @@
         <div class="input-panel">
           <div class="input-panel-header">
             <span>Left (Original)</span>
-            <button class="file-btn" onclick="document.getElementById('file1').click()">Upload</button>
+            <div class="panel-actions">
+              <button class="file-btn" onclick="document.getElementById('file1').click()">Upload</button>
+            </div>
             <input type="file" id="file1" accept=".json" onchange="handleFile(1, this)">
           </div>
           <textarea id="json1" placeholder='{"name": "John", "age": 30}'></textarea>
@@ -303,7 +389,9 @@
         <div class="input-panel">
           <div class="input-panel-header">
             <span>Right (Modified)</span>
-            <button class="file-btn" onclick="document.getElementById('file2').click()">Upload</button>
+            <div class="panel-actions">
+              <button class="file-btn" onclick="document.getElementById('file2').click()">Upload</button>
+            </div>
             <input type="file" id="file2" accept=".json" onchange="handleFile(2, this)">
           </div>
           <textarea id="json2" placeholder='{"name": "Jane", "age": 25}'></textarea>
@@ -363,6 +451,30 @@
 
   <div id="output"></div>
 
+  <div class="tree-section tree-only" id="treeSection">
+    <div class="input-panel">
+      <div class="input-panel-header">
+        <span id="treeFileName">JSON Editor</span>
+        <div class="panel-actions">
+          <button class="file-btn undo-btn" id="undoT" onclick="undoTree('T')" disabled>Undo</button>
+          <div class="mode-toggle">
+            <button id="modeTextT" class="active" onclick="setMode('T', 'text')">Text</button>
+            <button id="modeTreeT" onclick="setMode('T', 'tree')">Tree</button>
+          </div>
+          <button class="file-btn" onclick="loadFromCompare(1)" title="Copy the Left JSON from Compare mode">Load Left</button>
+          <button class="file-btn" onclick="loadFromCompare(2)" title="Copy the Right JSON from Compare mode">Load Right</button>
+          <button class="file-btn" onclick="document.getElementById('fileT').click()">Upload</button>
+          <button class="file-btn" onclick="clearTree()">Clear</button>
+          <button class="btn download-btn" onclick="downloadTree()">Download</button>
+        </div>
+        <input type="file" id="fileT" accept=".json,application/json" onchange="handleFile('T', this)">
+      </div>
+      <div class="tree-error" id="treeErrorT"></div>
+      <div class="tree-view" id="treeT"></div>
+      <textarea id="jsonT" placeholder='Paste JSON here (or Upload / Load Left / Load Right), then switch to Tree'></textarea>
+    </div>
+  </div>
+
   <script>
     let jumpIndex = { removed: 0, modified: 0, added: 0 };
 
@@ -374,8 +486,17 @@
       const file = input.files[0];
       if (!file) return;
       const reader = new FileReader();
-      reader.onload = (e) => document.getElementById(`json${num}`).value = e.target.result;
+      reader.onload = (e) => {
+        document.getElementById(`json${num}`).value = e.target.result;
+        if (num === 'T') {
+          treeFileName = file.name;
+          document.getElementById('treeFileName').textContent = file.name;
+          resetTreeHistory();
+          setMode('T', 'tree');
+        }
+      };
       reader.readAsText(file);
+      input.value = '';   // allow re-uploading the same file
     }
 
     function clearAll() {
@@ -702,6 +823,379 @@
     function escapeHtml(str) {
       return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
     }
+
+    // ---------- Tree editor (duplicate sibling nodes) ----------
+    const editor = {
+      T: { mode: 'text', root: undefined, collapsed: new WeakSet(), nodes: [], undo: [] }
+    };
+    let treeFileName = null;
+
+    // Switching modes only toggles visibility, so each mode keeps its state.
+    function setAppMode(mode) {
+      document.body.classList.toggle('mode-tree', mode === 'tree');
+      document.getElementById('appModeCompare').classList.toggle('active', mode === 'compare');
+      document.getElementById('appModeTree').classList.toggle('active', mode === 'tree');
+    }
+
+    function resetTreeHistory() {
+      editor.T.undo = [];
+      updateUndo('T');
+    }
+
+    function loadFromCompare(n) {
+      const text = document.getElementById(`json${n}`).value.trim();
+      if (!text) return showTreeError('T', `${n === 1 ? 'Left' : 'Right'} JSON in Compare mode is empty.`);
+      try { JSON.parse(text); } catch (e) {
+        return showTreeError('T', `${n === 1 ? 'Left' : 'Right'} JSON is invalid: ${e.message}`);
+      }
+      document.getElementById('jsonT').value = text;
+      treeFileName = null;
+      document.getElementById('treeFileName').textContent = `JSON Editor — from ${n === 1 ? 'Left' : 'Right'}`;
+      resetTreeHistory();
+      setMode('T', 'tree');
+    }
+
+    function clearTree() {
+      document.getElementById('jsonT').value = '';
+      editor.T.root = undefined;
+      treeFileName = null;
+      document.getElementById('treeFileName').textContent = 'JSON Editor';
+      resetTreeHistory();
+      setMode('T', 'text');
+    }
+
+    function downloadTree() {
+      const text = document.getElementById('jsonT').value.trim();
+      if (!text) return showTreeError('T', 'Nothing to download.');
+      let data;
+      try { data = JSON.parse(text); } catch (e) {
+        return showTreeError('T', `Invalid JSON: ${e.message}`);
+      }
+      const blob = new Blob([JSON.stringify(data, null, 2) + '\n'], { type: 'application/json' });
+      const name = treeFileName ? treeFileName.replace(/\.json$/i, '') + '.edited.json' : 'edited.json';
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = name;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+    }
+
+    function setMode(side, mode) {
+      const st = editor[side];
+      const ta = document.getElementById(`json${side}`);
+      const panel = ta.closest('.input-panel');
+      if (mode === 'tree') {
+        const text = ta.value.trim();
+        if (!text) return showTreeError(side, 'Paste or upload JSON first.');
+        try {
+          st.root = JSON.parse(text);
+        } catch (e) {
+          return showTreeError(side, `Invalid JSON: ${e.message}`);
+        }
+        st.collapsed = new WeakSet();
+        panel.classList.add('tree-mode');
+        renderTree(side);
+      } else {
+        panel.classList.remove('tree-mode');
+      }
+      st.mode = mode;
+      document.getElementById(`modeText${side}`).classList.toggle('active', mode === 'text');
+      document.getElementById(`modeTree${side}`).classList.toggle('active', mode === 'tree');
+      showTreeError(side, '');
+    }
+
+    function showTreeError(side, msg) {
+      const el = document.getElementById(`treeError${side}`);
+      el.textContent = msg;
+      el.classList.toggle('visible', !!msg);
+      clearTimeout(el._t);
+      if (msg) el._t = setTimeout(() => el.classList.remove('visible'), 4000);
+    }
+
+    function renderTree(side, flashPath) {
+      const st = editor[side];
+      const view = document.getElementById(`tree${side}`);
+      const scroll = view.scrollTop;
+      const lines = [];
+      st.nodes = [];
+
+      const prim = (v, id) => {
+        const attr = `data-edit="value" data-node="${id}" title="Click to edit"`;
+        if (typeof v === 'string') return `<span class="t-str t-edit" ${attr}>${escapeHtml(JSON.stringify(v))}</span>`;
+        if (typeof v === 'number') return `<span class="t-num t-edit" ${attr}>${v}</span>`;
+        if (v !== null && typeof v === 'object') return `<span class="t-edit" ${attr}>${Array.isArray(v) ? '[]' : '{}'}</span>`;
+        return `<span class="t-lit t-edit" ${attr}>${v}</span>`;
+      };
+      const line = (code, gutter = '', plusId = null) => {
+        const plus = plusId !== null
+          ? `<button class="dup-btn" data-node="${plusId}" title="Duplicate this node as the next sibling">+</button>` +
+            `<button class="dup-btn del-btn" data-node="${plusId}" title="Remove this node">−</button>`
+          : '';
+        lines.push(`<div class="t-line" data-i="${lines.length}"><span class="t-gutter">${gutter}</span><span class="t-code">${code}</span>${plus}</div>`);
+      };
+
+      const walk = (v, key, path, depth, isLast) => {
+        const id = st.nodes.length;
+        const node = { path, start: lines.length, end: 0 };
+        st.nodes.push(node);
+        const indent = '  '.repeat(depth);
+        const keyHtml = typeof key === 'string'
+          ? `<span class="t-key t-edit" data-edit="key" data-node="${id}" title="Click to rename">${escapeHtml(JSON.stringify(key))}</span>: `
+          : '';
+        const comma = isLast ? '' : ',';
+        const plusId = path.length ? id : null;   // root has no siblings
+
+        if (v !== null && typeof v === 'object') {
+          const isArr = Array.isArray(v);
+          const entries = isArr ? v.map((x, i) => [i, x]) : Object.entries(v);
+          const [o, c] = isArr ? ['[', ']'] : ['{', '}'];
+          if (entries.length === 0) {
+            line(indent + keyHtml + prim(v, id) + comma, '', plusId);
+          } else if (st.collapsed.has(v)) {
+            const fold = `<span class="t-fold closed" data-node="${id}">▼</span>`;
+            const label = `${entries.length} ${isArr ? 'item' : 'key'}${entries.length > 1 ? 's' : ''}`;
+            line(`${indent}${keyHtml}${o}<span class="t-preview"> … ${label} </span>${c}${comma}`, fold, plusId);
+          } else {
+            line(indent + keyHtml + o, `<span class="t-fold" data-node="${id}">▼</span>`);
+            entries.forEach(([k, x], i) => walk(x, k, [...path, k], depth + 1, i === entries.length - 1));
+            line(indent + c + comma, '', plusId);
+          }
+        } else {
+          line(indent + keyHtml + prim(v, id) + comma, '', plusId);
+        }
+        node.end = lines.length - 1;
+      };
+
+      walk(st.root, null, [], 0, true);
+      view.innerHTML = lines.join('');
+      view.scrollTop = scroll;
+
+      if (flashPath) {
+        const key = JSON.stringify(flashPath);
+        const node = st.nodes.find(n => JSON.stringify(n.path) === key);
+        if (node) {
+          const els = view.querySelectorAll('.t-line');
+          for (let i = node.start; i <= node.end; i++) els[i].classList.add('t-flash');
+          const first = els[node.start], last = els[node.end];
+          if (last.offsetTop + last.offsetHeight > view.scrollTop + view.clientHeight) {
+            view.scrollTop = Math.min(first.offsetTop - 8, last.offsetTop + last.offsetHeight - view.clientHeight + 8);
+          }
+        }
+      }
+    }
+
+    function getAt(root, path) {
+      return path.reduce((obj, k) => obj[k], root);
+    }
+
+    function cloneJson(v) {
+      return typeof structuredClone === 'function' ? structuredClone(v) : JSON.parse(JSON.stringify(v));
+    }
+
+    function uniqueKey(obj, base) {
+      let k = `${base}_copy`, n = 2;
+      while (Object.prototype.hasOwnProperty.call(obj, k)) k = `${base}_copy${n++}`;
+      return k;
+    }
+
+    function duplicateNode(side, path) {
+      const st = editor[side];
+      const parentPath = path.slice(0, -1);
+      const last = path[path.length - 1];
+      const parent = getAt(st.root, parentPath);
+      const original = getAt(st.root, path);
+      const copy = cloneJson(original);
+      if (original && typeof original === 'object' && st.collapsed.has(original)) st.collapsed.add(copy);
+
+      pushUndo(side);
+      let newPath;
+      if (Array.isArray(parent)) {
+        parent.splice(last + 1, 0, copy);
+        newPath = [...parentPath, last + 1];
+      } else {
+        // Rebuild the object so the copy sits right after the original key
+        const newKey = uniqueKey(parent, last);
+        const rebuilt = {};
+        for (const k of Object.keys(parent)) {
+          rebuilt[k] = parent[k];
+          if (k === last) rebuilt[newKey] = copy;
+        }
+        if (parentPath.length === 0) st.root = rebuilt;
+        else getAt(st.root, parentPath.slice(0, -1))[parentPath[parentPath.length - 1]] = rebuilt;
+        newPath = [...parentPath, newKey];
+      }
+      syncText(side);
+      renderTree(side, newPath);
+    }
+
+    // Replace the value at `path` (handles the root)
+    function setAt(side, path, value) {
+      const st = editor[side];
+      if (path.length === 0) st.root = value;
+      else getAt(st.root, path.slice(0, -1))[path[path.length - 1]] = value;
+    }
+
+    function startEdit(side, el) {
+      const st = editor[side];
+      const node = st.nodes[+el.dataset.node];
+      if (!node || el.querySelector('input')) return;
+      const kind = el.dataset.edit;
+      const path = node.path;
+      const current = kind === 'key' ? path[path.length - 1] : JSON.stringify(getAt(st.root, path));
+
+      const input = document.createElement('input');
+      input.className = 't-input';
+      input.value = current;
+      input.spellcheck = false;
+      input.title = kind === 'key'
+        ? 'Enter to save · Esc to cancel · Tab to edit value'
+        : 'JSON literal: "text", 42, true, null, {} or []. Plain text is saved as a string. Enter to save · Esc to cancel';
+      const fit = () => { input.style.width = `${Math.max(3, input.value.length + 2)}ch`; };
+      fit();
+      el.textContent = '';
+      el.classList.remove('t-edit');
+      el.appendChild(input);
+      input.focus();
+      input.select();
+
+      let done = false;
+      const finish = (save, next) => {
+        if (done) return;
+        done = true;
+        if (save) {
+          const err = kind === 'key' ? renameKey(side, path, input.value) : setValue(side, path, input.value);
+          if (err) { showTreeError(side, err); renderTree(side); return; }
+        } else {
+          renderTree(side);
+        }
+        if (next) {
+          const valueEl = document.querySelector(`#tree${side} [data-edit="value"][data-node="${el.dataset.node}"]`);
+          if (valueEl) startEdit(side, valueEl);
+        }
+      };
+      input.addEventListener('input', () => {
+        fit();
+        if (kind === 'key') {
+          const parent = getAt(st.root, path.slice(0, -1));
+          const v = input.value;
+          input.classList.toggle('invalid', v !== current && (v === '' || Object.prototype.hasOwnProperty.call(parent, v)));
+        }
+      });
+      input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') { e.preventDefault(); finish(true); }
+        else if (e.key === 'Escape') { e.preventDefault(); finish(false); }
+        else if (e.key === 'Tab' && kind === 'key') { e.preventDefault(); finish(true, true); }
+      });
+      input.addEventListener('blur', () => finish(true));
+      input.addEventListener('click', (e) => e.stopPropagation());
+    }
+
+    function renameKey(side, path, newKey) {
+      const st = editor[side];
+      const oldKey = path[path.length - 1];
+      if (newKey === oldKey) { renderTree(side); return null; }
+      if (newKey === '') return 'Key cannot be empty.';
+      const parentPath = path.slice(0, -1);
+      const parent = getAt(st.root, parentPath);
+      if (Object.prototype.hasOwnProperty.call(parent, newKey)) return `Key "${newKey}" already exists here.`;
+      pushUndo(side);
+      const rebuilt = {};
+      for (const k of Object.keys(parent)) rebuilt[k === oldKey ? newKey : k] = parent[k];
+      setAt(side, parentPath, rebuilt);
+      syncText(side);
+      renderTree(side, [...parentPath, newKey]);
+      return null;
+    }
+
+    function setValue(side, path, text) {
+      const st = editor[side];
+      let value;
+      try { value = JSON.parse(text); } catch { value = text; }   // not valid JSON → plain string
+      if (JSON.stringify(value) === JSON.stringify(getAt(st.root, path))) { renderTree(side); return null; }
+      pushUndo(side);
+      setAt(side, path, value);
+      syncText(side);
+      renderTree(side, path);
+      return null;
+    }
+
+    function removeNode(side, path) {
+      const st = editor[side];
+      const parent = getAt(st.root, path.slice(0, -1));
+      const last = path[path.length - 1];
+      pushUndo(side);
+      if (Array.isArray(parent)) parent.splice(last, 1);
+      else delete parent[last];
+      syncText(side);
+      renderTree(side);
+    }
+
+    function syncText(side) {
+      document.getElementById(`json${side}`).value = JSON.stringify(editor[side].root, null, 2);
+    }
+
+    function pushUndo(side) {
+      const st = editor[side];
+      st.undo.push(JSON.stringify(st.root));
+      if (st.undo.length > 50) st.undo.shift();
+      updateUndo(side);
+    }
+
+    function updateUndo(side) {
+      document.getElementById(`undo${side}`).disabled = editor[side].undo.length === 0;
+    }
+
+    function undoTree(side) {
+      const st = editor[side];
+      if (!st.undo.length) return;
+      st.root = JSON.parse(st.undo.pop());
+      st.collapsed = new WeakSet();
+      updateUndo(side);
+      syncText(side);
+      renderTree(side);
+    }
+
+    function highlightNode(side, id, on, isDelete) {
+      const node = editor[side].nodes[id];
+      if (!node) return;
+      const els = document.querySelectorAll(`#tree${side} .t-line`);
+      for (let i = node.start; i <= node.end; i++) els[i].classList.toggle(isDelete ? 't-target-del' : 't-target', on);
+    }
+
+    ['T'].forEach(side => {
+      const view = document.getElementById(`tree${side}`);
+      view.addEventListener('click', (e) => {
+        const btn = e.target.closest('.dup-btn');
+        if (btn) {
+          const path = editor[side].nodes[+btn.dataset.node].path;
+          return btn.classList.contains('del-btn') ? removeNode(side, path) : duplicateNode(side, path);
+        }
+        const editEl = e.target.closest('[data-edit]');
+        if (editEl) return startEdit(side, editEl);
+        const fold = e.target.closest('.t-fold');
+        if (fold) {
+          const st = editor[side];
+          const v = getAt(st.root, st.nodes[+fold.dataset.node].path);
+          st.collapsed.has(v) ? st.collapsed.delete(v) : st.collapsed.add(v);
+          renderTree(side);
+        }
+      });
+      view.addEventListener('mouseover', (e) => {
+        const btn = e.target.closest('.dup-btn');
+        if (btn) highlightNode(side, +btn.dataset.node, true, btn.classList.contains('del-btn'));
+      });
+      view.addEventListener('mouseout', (e) => {
+        const btn = e.target.closest('.dup-btn');
+        if (btn) highlightNode(side, +btn.dataset.node, false, btn.classList.contains('del-btn'));
+      });
+      // Typing in text mode invalidates undo history built in tree mode
+      document.getElementById(`json${side}`).addEventListener('input', () => {
+        editor[side].undo = [];
+        updateUndo(side);
+      });
+    });
   </script>
 </body>
 </html>
