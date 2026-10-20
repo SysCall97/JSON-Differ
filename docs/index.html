@@ -494,14 +494,15 @@
 
   <div id="output"></div>
 
-  <div class="tree-toast" id="treeToast"><span class="toast-dot"></span><span class="toast-msg"></span><button onclick="undoTree('T'); hideToast()">Undo</button></div>
+  <div class="tree-toast" id="treeToast"><span class="toast-dot"></span><span class="toast-msg"></span><button id="toastAction">Undo</button></div>
 
   <div class="tree-section tree-only" id="treeSection">
     <div class="input-panel">
       <div class="input-panel-header">
         <span id="treeFileName">JSON Editor</span>
         <div class="panel-actions">
-          <button class="file-btn undo-btn" id="undoT" onclick="undoTree('T')" disabled>Undo</button>
+          <button class="file-btn undo-btn" id="undoT" onclick="undoTree('T')" title="Undo (⌘/Ctrl+Z)" disabled>↶ Undo</button>
+          <button class="file-btn undo-btn" id="redoT" onclick="redoTree('T')" title="Redo (⇧⌘Z / Ctrl+Y)" disabled>↷ Redo</button>
           <div class="mode-toggle">
             <button id="modeTextT" class="active" onclick="setMode('T', 'text')">Text</button>
             <button id="modeTreeT" onclick="setMode('T', 'tree')">Tree</button>
@@ -871,7 +872,7 @@
 
     // ---------- Tree editor (duplicate sibling nodes) ----------
     const editor = {
-      T: { mode: 'text', root: undefined, collapsed: new WeakSet(), nodes: [], undo: [] }
+      T: { mode: 'text', root: undefined, collapsed: new WeakSet(), nodes: [], undo: [], redo: [] }
     };
     let treeFileName = null;
 
@@ -885,6 +886,7 @@
 
     function resetTreeHistory() {
       editor.T.undo = [];
+      editor.T.redo = [];
       updateUndo('T');
     }
 
@@ -1214,8 +1216,11 @@
       return path.map((k, i) => typeof k === 'number' ? `[${k}]` : (i ? '.' : '') + k).join('');
     }
 
-    function showToast(html, color) {
+    function showToast(html, color, action = { label: 'Undo', fn: () => undoTree('T') }) {
       const t = document.getElementById('treeToast');
+      const btn = document.getElementById('toastAction');
+      btn.textContent = action.label;
+      btn.onclick = () => { hideToast(); action.fn(); };
       t.querySelector('.toast-msg').innerHTML = html;
       t.querySelector('.toast-dot').style.background = color;
       t.classList.add('visible');
@@ -1234,22 +1239,63 @@
     function pushUndo(side) {
       const st = editor[side];
       st.undo.push(JSON.stringify(st.root));
-      if (st.undo.length > 50) st.undo.shift();
+      if (st.undo.length > 100) st.undo.shift();
+      st.redo = [];               // a new change invalidates the redo history
       updateUndo(side);
     }
 
     function updateUndo(side) {
       document.getElementById(`undo${side}`).disabled = editor[side].undo.length === 0;
+      document.getElementById(`redo${side}`).disabled = editor[side].redo.length === 0;
     }
 
-    function undoTree(side) {
+    function undoTree(side) { stepHistory(side, 'undo'); }
+    function redoTree(side) { stepHistory(side, 'redo'); }
+
+    function stepHistory(side, dir) {
       const st = editor[side];
-      if (!st.undo.length) return;
-      st.root = JSON.parse(st.undo.pop());
+      const from = dir === 'undo' ? st.undo : st.redo;
+      const to = dir === 'undo' ? st.redo : st.undo;
+      if (!from.length || st.busy) return;
+      const before = st.root;
+      to.push(JSON.stringify(st.root));
+      st.root = JSON.parse(from.pop());
       st.collapsed = new WeakSet();
       updateUndo(side);
       syncText(side);
-      renderTree(side);
+      const changed = firstDiffPath(before, st.root, []);
+      renderTree(side, changed || null, 'edit');
+      const label = dir === 'undo' ? 'Undid last change' : 'Redid change';
+      const where = changed && changed.length ? ` at <code>${escapeHtml(pathLabel(changed))}</code>` : '';
+      showToast(label + where, '#d29922', dir === 'undo'
+        ? { label: 'Redo', fn: () => redoTree(side) }
+        : { label: 'Undo', fn: () => undoTree(side) });
+    }
+
+    // Deepest path in `b` (the new state) where it differs from `a`, so it can be highlighted
+    function firstDiffPath(a, b, path) {
+      if (JSON.stringify(a) === JSON.stringify(b)) return null;
+      const isObj = v => v !== null && typeof v === 'object';
+      if (!isObj(a) || !isObj(b) || Array.isArray(a) !== Array.isArray(b)) return path;
+      if (Array.isArray(b)) {
+        const n = Math.max(a.length, b.length);
+        for (let i = 0; i < n; i++) {
+          if (JSON.stringify(a[i]) !== JSON.stringify(b[i])) {
+            if (i >= b.length) return path;                 // element gone → highlight parent
+            if (i >= a.length || a.length !== b.length) return [...path, i];
+            return firstDiffPath(a[i], b[i], [...path, i]);
+          }
+        }
+        return path;
+      }
+      const ka = Object.keys(a), kb = Object.keys(b);
+      const added = kb.find(k => !(k in a));
+      if (added !== undefined) return [...path, added];
+      if (ka.some(k => !(k in b))) return path;            // key gone → highlight parent
+      for (const k of kb) {
+        if (JSON.stringify(a[k]) !== JSON.stringify(b[k])) return firstDiffPath(a[k], b[k], [...path, k]);
+      }
+      return path;                                          // only key order changed
     }
 
     function highlightNode(side, id, on, isDelete) {
@@ -1288,8 +1334,19 @@
       // Typing in text mode invalidates undo history built in tree mode
       document.getElementById(`json${side}`).addEventListener('input', () => {
         editor[side].undo = [];
+        editor[side].redo = [];
         updateUndo(side);
       });
+    });
+
+    // Keyboard: ⌘/Ctrl+Z undo, ⇧⌘Z / Ctrl+Shift+Z / Ctrl+Y redo (tree editor only, not while typing)
+    document.addEventListener('keydown', (e) => {
+      if (!document.body.classList.contains('mode-tree') || editor.T.mode !== 'tree') return;
+      if (e.target.closest('input, textarea, [contenteditable]')) return;
+      if (!(e.metaKey || e.ctrlKey)) return;
+      const k = e.key.toLowerCase();
+      if (k === 'z' && !e.shiftKey) { e.preventDefault(); undoTree('T'); }
+      else if ((k === 'z' && e.shiftKey) || k === 'y') { e.preventDefault(); redoTree('T'); }
     });
   </script>
 </body>
