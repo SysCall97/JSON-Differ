@@ -1,0 +1,71 @@
+{
+  "manifest_version": 3,
+  "name": "RTDB Tree Editor",
+  "version": "1.3.0",
+  "description": "Adds a \"Tree editor\" tab to Firebase Realtime Database in the console: edit the JSON as a tree, publish it with your console permissions, and roll back from snapshots.",
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "action": {
+    "default_title": "Toggle the RTDB Tree editor (on a Firebase console tab)",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png"
+    }
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://console.firebase.google.com/*"
+      ],
+      "js": [
+        "session-capture.js"
+      ],
+      "run_at": "document_start",
+      "world": "MAIN",
+      "all_frames": true
+    },
+    {
+      "matches": [
+        "https://console.firebase.google.com/*"
+      ],
+      "js": [
+        "content.js"
+      ],
+      "css": [
+        "content.css"
+      ],
+      "run_at": "document_start",
+      "all_frames": true
+    }
+  ],
+  "permissions": [
+    "storage",
+    "unlimitedStorage",
+    "webRequest"
+  ],
+  "host_permissions": [
+    "https://*.firebaseio.com/*",
+    "https://*.firebasedatabase.app/*",
+    "https://console.firebase.google.com/*"
+  ],
+  "minimum_chrome_version": "111",
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "panel.js",
+        "panel.css",
+        "tree-editor.js",
+        "icons/icon48.png"
+      ],
+      "matches": [
+        "https://console.firebase.google.com/*"
+      ]
+    }
+  ]
+}
