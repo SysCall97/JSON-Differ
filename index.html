@@ -395,6 +395,42 @@
     .tree-section textarea { height: calc(100vh - 110px); resize: none; }
     .tree-section .input-panel-header input[type="file"] { display: none; }
     .download-btn { padding: 4px 12px; font-size: 11px; border-radius: 4px; }
+    /* Header right: extension download + install guide */
+    .header-right { display: flex; align-items: center; gap: 14px; }
+    .ext-actions { display: flex; gap: 8px; padding-left: 14px; border-left: 1px solid #30363d; }
+    a.btn { text-decoration: none; display: inline-flex; align-items: center; }
+    .btn-ext { background: #1f6feb; }
+    .btn-ext:hover { background: #388bfd; }
+    .btn-sm { padding: 4px 10px; font-size: 12px; }
+    @media (max-width: 760px) {
+      .header { flex-wrap: wrap; gap: 10px; }
+      .ext-actions { border-left: none; padding-left: 0; }
+    }
+
+    .guide-backdrop {
+      position: fixed; inset: 0; background: rgba(1,4,9,0.7); z-index: 500;
+      display: flex; align-items: center; justify-content: center; padding: 16px;
+    }
+    .guide-backdrop[hidden] { display: none; }
+    .guide {
+      background: #161b22; border: 1px solid #30363d; border-radius: 10px; padding: 22px 24px;
+      width: min(620px, 100%); max-height: 90vh; overflow: auto; box-shadow: 0 16px 48px rgba(0,0,0,0.6);
+    }
+    .guide-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 8px; }
+    .guide h2 { font-size: 17px; color: #f0f6fc; font-weight: 600; }
+    .guide-close { background: none; border: none; color: #8b949e; font-size: 16px; cursor: pointer; padding: 4px 6px; border-radius: 4px; }
+    .guide-close:hover { background: #30363d; color: #f0f6fc; }
+    .guide-intro { font-size: 13px; color: #8b949e; line-height: 1.5; margin-bottom: 14px; }
+    .guide-steps { padding-left: 22px; display: flex; flex-direction: column; gap: 14px; font-size: 14px; line-height: 1.5; }
+    .guide-steps li::marker { color: #58a6ff; font-weight: 600; }
+    .guide-steps code, .guide-note code { background: #0d1117; border: 1px solid #30363d; border-radius: 4px; padding: 1px 6px; font-size: 12px; color: #79c0ff; }
+    .guide-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 8px; }
+    .ext-link { text-decoration: none; }
+    .ext-link code { font-size: 13px; padding: 4px 10px; display: inline-block; }
+    .ext-link:hover code { border-color: #58a6ff; }
+    .copied { font-size: 12px; color: #3fb950; opacity: 0; transition: opacity 0.2s; }
+    .copied.visible { opacity: 1; }
+    .guide-note { margin-top: 18px; padding: 10px 12px; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; font-size: 12px; color: #8b949e; line-height: 1.5; }
   </style>
 </head>
 <body>
@@ -406,9 +442,45 @@
         <button id="appModeTree" onclick="setAppMode('tree')">Tree Editor</button>
       </div>
     </div>
-    <div class="header-actions compare-only">
-      <button class="btn" onclick="compare()">Compare</button>
-      <button class="btn btn-secondary" onclick="clearAll()">Clear</button>
+    <div class="header-right">
+      <div class="header-actions compare-only">
+        <button class="btn" onclick="compare()">Compare</button>
+        <button class="btn btn-secondary" onclick="clearAll()">Clear</button>
+      </div>
+      <div class="ext-actions">
+        <a class="btn btn-ext" id="extDownload" href="https://syscall97.github.io/JSON-Differ/rtdb-tree-editor.zip" download title="Download the RTDB Tree Editor Chrome extension (.zip)">⬇ Download extension</a>
+        <button class="btn btn-secondary" onclick="openGuide()" title="How to add the extension to Chrome">How to install</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="guide-backdrop" id="guide" hidden onclick="if (event.target === this) closeGuide()">
+    <div class="guide" role="dialog" aria-modal="true" aria-labelledby="guideTitle">
+      <div class="guide-head">
+        <h2 id="guideTitle">Install the RTDB Tree Editor extension</h2>
+        <button class="guide-close" onclick="closeGuide()" aria-label="Close">✕</button>
+      </div>
+      <p class="guide-intro">Adds a <b>Tree editor</b> tab to Realtime Database in the Firebase console, so you can edit data as a tree and publish it back. Works in Chrome, Edge, Brave and other Chromium browsers.</p>
+      <ol class="guide-steps">
+        <li>
+          <b>Download and unzip</b> the extension. Keep the unzipped folder somewhere permanent (not Downloads) — Chrome loads it from there.
+          <div class="guide-row"><a class="btn btn-ext" href="https://syscall97.github.io/JSON-Differ/rtdb-tree-editor.zip" download>⬇ Download extension</a></div>
+        </li>
+        <li>
+          <b>Open the extensions page.</b> Click the link below; if your browser blocks it (most do for websites), it is copied — paste it into the address bar and press Enter.
+          <div class="guide-row">
+            <a class="ext-link" id="extPageLink" href="chrome://extensions" onclick="return openExtensionsPage(event)"><code id="extPageUrl">chrome://extensions</code></a>
+            <button class="btn btn-secondary btn-sm" onclick="copyExtUrl()">Copy</button>
+            <span class="copied" id="extCopied">Copied — paste it in the address bar</span>
+          </div>
+        </li>
+        <li><b>Turn on “Developer mode”</b> (switch in the top-right of that page).</li>
+        <li><b>Click “Load unpacked”</b> (top-left) and select the unzipped <code>rtdb-tree-editor</code> folder (the one that contains <code>manifest.json</code>).</li>
+        <li><b>Reload your Firebase console tab</b>, open <i>Realtime Database → Data</i>, and click the new <b>Tree editor</b> tab.</li>
+      </ol>
+      <div class="guide-note">
+        <b>Updating:</b> download again, replace the folder's contents, then click the ↻ reload icon on the extension's card in the extensions page and reload the console tab.
+      </div>
     </div>
   </div>
 
@@ -522,6 +594,44 @@
   </div>
 
   <script>
+    // ---------- Extension install guide ----------
+    // Browsers don't let websites open their extensions page, so the link
+    // also copies the address for pasting into the address bar.
+    function extensionsUrl() {
+      const ua = navigator.userAgent;
+      if (/Edg\//.test(ua)) return 'edge://extensions';
+      if (/OPR\//.test(ua)) return 'opera://extensions';
+      if (navigator.brave) return 'brave://extensions';
+      return 'chrome://extensions';
+    }
+    function openGuide() {
+      const url = extensionsUrl();
+      document.getElementById('extPageUrl').textContent = url;
+      document.getElementById('extPageLink').href = url;
+      document.getElementById('guide').hidden = false;
+    }
+    function closeGuide() { document.getElementById('guide').hidden = true; }
+    function copyExtUrl() {
+      const url = extensionsUrl();
+      const done = () => {
+        const el = document.getElementById('extCopied');
+        el.classList.add('visible');
+        clearTimeout(el._t);
+        el._t = setTimeout(() => el.classList.remove('visible'), 3500);
+      };
+      if (navigator.clipboard) navigator.clipboard.writeText(url).then(done, done);
+      else done();
+    }
+    function openExtensionsPage(e) {
+      copyExtUrl();
+      try { window.open(extensionsUrl(), '_blank'); } catch (_) { /* blocked */ }
+      e.preventDefault();
+      return false;
+    }
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && !document.getElementById('guide').hidden) closeGuide();
+    });
+
     let jumpIndex = { removed: 0, modified: 0, added: 0 };
 
     function toggleFold(id) {
