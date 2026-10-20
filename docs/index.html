@@ -374,6 +374,36 @@
     }
     .t-input.invalid { border-color: #f85149; }
     .t-line.t-target-del { background: rgba(248,81,73,0.18); }
+    /* Drag to reorder array items */
+    .t-handle { width: 16px; flex-shrink: 0; text-align: center; }
+    .t-drag {
+      display: inline-block; width: 14px; cursor: grab; color: #484f58; font-size: 12px;
+      user-select: none; opacity: 0; transition: opacity 0.15s, color 0.15s;
+    }
+    .t-line:hover .t-drag, .t-drag-src .t-drag { opacity: 1; }
+    .t-drag:hover { color: #58a6ff; }
+    .t-drag:active { cursor: grabbing; }
+    .t-line.t-drag-src { opacity: 0.55; background: rgba(56,139,253,0.18); box-shadow: inset 3px 0 0 #58a6ff; }
+    .t-drag-ghost {
+      position: fixed; top: -10000px; left: -10000px; pointer-events: none;
+      background: #161b22; border: 1px solid #58a6ff; border-radius: 6px; padding: 4px 0;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+    }
+    .t-drag-ghost .t-line { background: transparent; }
+    .t-drag-ghost .t-btn, .t-drag-ghost .dup-btn { display: none; }
+    .t-ghost-more { padding: 2px 40px; color: #8b949e; font-style: italic; }
+    .t-scroll-band { pointer-events: auto; transition: background 0.2s; }
+    .t-scroll-band.top.active { background: linear-gradient(to bottom, rgba(56,139,253,0.28), transparent); }
+    .t-scroll-band.bottom.active { background: linear-gradient(to top, rgba(56,139,253,0.28), transparent); }
+    .t-line.t-drop-before { box-shadow: inset 0 3px 0 #58a6ff; }
+    .t-line.t-drop-after { box-shadow: inset 0 -3px 0 #58a6ff; }
+    .t-line.t-swapping { background: #1c2d44 !important; box-shadow: 0 2px 10px rgba(0,0,0,0.45), inset 3px 0 0 #58a6ff; }
+    .t-line.t-flash-swap { animation: tGlowSwap 1.8s ease-out; }
+    @keyframes tGlowSwap {
+      0%, 30% { background: rgba(56,139,253,0.35); box-shadow: inset 3px 0 0 #58a6ff; }
+      100%    { background: transparent; box-shadow: inset 3px 0 0 transparent; }
+    }
+
     /* App modes */
     .header-left { display: flex; align-items: center; gap: 16px; }
     .app-mode { display: flex; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; padding: 2px; }
@@ -1086,12 +1116,12 @@
         if (v !== null && typeof v === 'object') return `<span class="t-edit" ${attr}>${Array.isArray(v) ? '[]' : '{}'}</span>`;
         return `<span class="t-lit t-edit" ${attr}>${v}</span>`;
       };
-      const line = (code, gutter = '', plusId = null) => {
+      const line = (code, gutter = '', plusId = null, handle = '') => {
         const plus = plusId !== null
           ? `<button class="dup-btn" data-node="${plusId}" title="Duplicate this node as the next sibling">+</button>` +
             `<button class="dup-btn del-btn" data-node="${plusId}" title="Remove this node">−</button>`
           : '';
-        lines.push(`<div class="t-line" data-i="${lines.length}"><span class="t-gutter">${gutter}</span><span class="t-code">${code}</span>${plus}</div>`);
+        lines.push(`<div class="t-line" data-i="${lines.length}"><span class="t-handle">${handle}</span><span class="t-gutter">${gutter}</span><span class="t-code">${code}</span>${plus}</div>`);
       };
 
       const walk = (v, key, path, depth, isLast) => {
@@ -1104,24 +1134,27 @@
           : '';
         const comma = isLast ? '' : ',';
         const plusId = path.length ? id : null;   // root has no siblings
+        // array items get a drag handle (drag within the same array to reorder)
+        const handle = typeof key === 'number'
+          ? `<span class="t-drag" draggable="true" data-node="${id}" title="Drag to reorder">⠿</span>` : '';
 
         if (v !== null && typeof v === 'object') {
           const isArr = Array.isArray(v);
           const entries = isArr ? v.map((x, i) => [i, x]) : Object.entries(v);
           const [o, c] = isArr ? ['[', ']'] : ['{', '}'];
           if (entries.length === 0) {
-            line(indent + keyHtml + prim(v, id) + comma, '', plusId);
+            line(indent + keyHtml + prim(v, id) + comma, '', plusId, handle);
           } else if (st.collapsed.has(v)) {
             const fold = `<span class="t-fold closed" data-node="${id}">▼</span>`;
             const label = `${entries.length} ${isArr ? 'item' : 'key'}${entries.length > 1 ? 's' : ''}`;
-            line(`${indent}${keyHtml}${o}<span class="t-preview"> … ${label} </span>${c}${comma}`, fold, plusId);
+            line(`${indent}${keyHtml}${o}<span class="t-preview"> … ${label} </span>${c}${comma}`, fold, plusId, handle);
           } else {
-            line(indent + keyHtml + o, `<span class="t-fold" data-node="${id}">▼</span>`);
+            line(indent + keyHtml + o, `<span class="t-fold" data-node="${id}">▼</span>`, null, handle);
             entries.forEach(([k, x], i) => walk(x, k, [...path, k], depth + 1, i === entries.length - 1));
             line(indent + c + comma, '', plusId);
           }
         } else {
-          line(indent + keyHtml + prim(v, id) + comma, '', plusId);
+          line(indent + keyHtml + prim(v, id) + comma, '', plusId, handle);
         }
         node.end = lines.length - 1;
       };
@@ -1144,6 +1177,269 @@
         const el = els[Math.min(gapIndex, els.length - 1)];
         if (el) { el.classList.add('t-gap'); scrollIntoTreeView(view, Math.min(gapIndex, els.length - 1)); }
       }
+    }
+
+    // ---------- Drag & drop: reorder items within an array ----------
+    function moveNode(side, path, to) {
+      const st = editor[side];
+      const parentPath = path.slice(0, -1);
+      const arr = getAt(st.root, parentPath);
+      const from = path[path.length - 1];
+      if (!Array.isArray(arr) || from === to || to < 0 || to >= arr.length) return;
+      const pk = JSON.stringify(parentPath);
+      const ranges = st.nodes
+        .filter(n => n.path.length === path.length && typeof n.path[n.path.length - 1] === 'number' && JSON.stringify(n.path.slice(0, -1)) === pk)
+        .sort((x, y) => x.path[x.path.length - 1] - y.path[y.path.length - 1])
+        .map(n => ({ start: n.start, end: n.end }));
+      pushUndo(side);
+      const [item] = arr.splice(from, 1);
+      arr.splice(to, 0, item);
+      const order = [...Array(arr.length).keys()];
+      order.splice(from, 1);
+      order.splice(to, 0, from);
+      const newPath = [...parentPath, to];
+      syncText(side);
+      renderTree(side, newPath, 'swap');
+      if (ranges.length === arr.length) animateReorderLines(document.getElementById(`tree${side}`), ranges, order, from, 22);
+      showToast(`Moved <code>${escapeHtml(pathLabel(path))}</code> → <code>${escapeHtml(pathLabel(newPath))}</code>`, '#58a6ff');
+    }
+
+    // FLIP animation for a reorder: every line slides from where it was to where it is now.
+    // `ranges` are the array items' old line ranges (in old order), `order` lists the
+    // old indices in their new order, `moved` is the old index of the dragged item.
+    function animateReorderLines(view, ranges, order, moved, lineH) {
+      if (window.matchMedia('(prefers-reduced-motion: reduce)').matches || !ranges.length) return;
+      const els = view.querySelectorAll('.t-line');
+      const anim = [];
+      let k = ranges[0].start;
+      for (const oi of order) {
+        const r = ranges[oi];
+        for (let off = 0; off <= r.end - r.start; off++, k++) {
+          const el = els[k];
+          const d = (r.start + off - k) * lineH;
+          if (!el || !d) continue;
+          el.style.transition = 'none';
+          el.style.transform = `translateY(${d}px)`;
+          el.style.position = 'relative';
+          el.style.zIndex = oi === moved ? '2' : '1';
+          if (oi === moved) el.classList.add('t-swapping');
+          anim.push(el);
+        }
+      }
+      view.getBoundingClientRect();   // apply the start positions before animating
+      requestAnimationFrame(() => {
+        for (const el of anim) {
+          el.style.transition = 'transform 0.45s cubic-bezier(0.2, 0.8, 0.2, 1)';
+          el.style.transform = '';
+        }
+        setTimeout(() => {
+          for (const el of anim) {
+            el.style.transition = el.style.position = el.style.zIndex = '';
+            el.classList.remove('t-swapping');
+          }
+        }, 500);
+      });
+    }
+    
+    // Where would the dragged item land? Upper half of an item = before it, lower half = after.
+    function dropPosition(els, target, from, clientY) {
+      const top = els[target.start].getBoundingClientRect().top;
+      const bottom = els[target.end].getBoundingClientRect().bottom;
+      const after = clientY > (top + bottom) / 2;
+      const ti = target.path[target.path.length - 1];
+      let to = after ? ti + 1 : ti;
+      if (from < to) to -= 1;                       // removing the item shifts later ones up
+      return { to, el: after ? els[target.end] : els[target.start], cls: after ? 't-drop-after' : 't-drop-before' };
+    }
+
+    // Auto-scroll while dragging near (or past) the top/bottom edge of the tree.
+    // It follows the dragged item's preview, not just the cursor: scrolling starts
+    // when the preview's top/bottom reaches the edge zone. Starts slow, speeds up
+    // the deeper you go into the zone and the longer you hold there.
+    function makeAutoScroller(view, { onDrop } = {}) {
+      const ZONE = 80;                 // px from the edge where scrolling starts
+      const MIN = 25, MAX = 260;       // px/second at the zone start / at the edge
+      const HOLD_BOOST = 2.5;          // up to this many × faster after holding ~2 s
+      let y = null, raf = 0, active = false, last = 0, holdSince = 0, dirNow = 0;
+      let above = 12, below = 12;      // preview extent above/below the cursor
+      let bands = [];
+      // Thin strips over the very top/bottom edge of the tree. Chrome's own drag
+      // auto-scroll kicks in there (fast and jumpy); covering them leaves only ours.
+      const makeBands = () => {
+        const r = view.getBoundingClientRect();
+        const H = 28;
+        return [[r.top, 'top'], [r.bottom - H, 'bottom']].map(([t, pos]) => {
+          const b = document.createElement('div');
+          b.className = `t-scroll-band ${pos}`;
+          Object.assign(b.style, { position: 'fixed', left: `${r.left}px`, width: `${r.width}px`, top: `${t}px`, height: `${H}px`, zIndex: '650' });
+          b.addEventListener('dragover', (e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; y = e.clientY; });
+          b.addEventListener('drop', (e) => { e.preventDefault(); onDrop && onDrop(); });
+          view.parentNode.appendChild(b);
+          return b;
+        });
+      };
+      const onMove = (e) => { if (e.clientY || e.clientX) y = e.clientY; };
+      const tick = (now) => {
+        if (!active) return;
+        const dt = last ? Math.min((now - last) / 1000, 0.05) : 0;
+        last = now;
+        let dir = 0, depth = 0;
+        if (y !== null) {
+          const r = view.getBoundingClientRect();
+          const topProbe = y - above, bottomProbe = y + below;
+          if (topProbe < r.top + ZONE && view.scrollTop > 0) { dir = -1; depth = r.top + ZONE - topProbe; }
+          else if (bottomProbe > r.bottom - ZONE && view.scrollTop + view.clientHeight < view.scrollHeight) {
+            dir = 1; depth = bottomProbe - (r.bottom - ZONE);
+          }
+        }
+        if (dir !== dirNow) {
+          dirNow = dir; holdSince = now;
+          bands.forEach((b) => b.classList.toggle('active', (dir < 0 && b.classList.contains('top')) || (dir > 0 && b.classList.contains('bottom'))));
+        }
+        if (dir && dt) {
+          const t = Math.min(depth / ZONE, 1);
+          const held = Math.min((now - holdSince) / 2000, 1);
+          const speed = (MIN + (MAX - MIN) * t * t) * (1 + (HOLD_BOOST - 1) * held);
+          view.scrollTop += dir * speed * dt;
+        }
+        raf = requestAnimationFrame(tick);
+      };
+      return {
+        start({ previewAbove = 12, previewBelow = 12 } = {}) {
+          above = previewAbove; below = Math.min(previewBelow, 160);
+          active = true; y = null; last = 0; dirNow = 0;
+          window.addEventListener('dragover', onMove, true);
+          window.addEventListener('drag', onMove, true);
+          bands = makeBands();
+          raf = requestAnimationFrame(tick);
+        },
+        stop() {
+          active = false; cancelAnimationFrame(raf);
+          window.removeEventListener('dragover', onMove, true);
+          window.removeEventListener('drag', onMove, true);
+          bands.forEach((b) => b.remove());
+          bands = [];
+        },
+      };
+    }
+
+    // Drag image showing the whole item being dragged (not just its first line)
+    function makeDragGhost(view, els, start, end) {
+      const ghost = document.createElement('div');
+      ghost.className = 't-drag-ghost';
+      const max = 14;
+      for (let k = start; k <= end && k < start + max; k++) {
+        const c = els[k].cloneNode(true);
+        c.classList.remove('t-drag-src', 't-target', 't-drop-before', 't-drop-after', 't-flash-add', 't-flash-edit', 't-flash-swap', 't-gap');
+        ghost.appendChild(c);
+      }
+      if (end - start + 1 > max) {
+        const more = document.createElement('div');
+        more.className = 't-ghost-more';
+        more.textContent = `… ${end - start + 1 - max} more lines`;
+        ghost.appendChild(more);
+      }
+      ghost.style.width = `${Math.min(view.clientWidth - 24, 520)}px`;
+      view.appendChild(ghost);
+      setTimeout(() => ghost.remove(), 0);
+      return ghost;
+    }
+
+    function flashPath(side, path, kind) {
+      const key = JSON.stringify(path);
+      const node = editor[side].nodes.find(n => JSON.stringify(n.path) === key);
+      if (!node) return;
+      const els = document.querySelectorAll(`#tree${side} .t-line`);
+      for (let i = node.start; i <= node.end; i++) els[i].classList.add(`t-flash-${kind}`);
+    }
+
+    function markLines(side, node, cls, on) {
+      if (!node) return;
+      const els = document.querySelectorAll(`#tree${side} .t-line`);
+      for (let i = node.start; i <= node.end; i++) els[i] && els[i].classList.toggle(cls, on);
+    }
+
+    function bindDrag(side) {
+      const view = document.getElementById(`tree${side}`);
+      let drag = null;   // { node, items, drop }
+      let doDrop = null;
+      const scroller = makeAutoScroller(view, { onDrop: () => doDrop && doDrop() });
+      view.addEventListener('dragstart', (e) => {
+        const h = e.target.closest && e.target.closest('.t-drag');
+        if (!h) return;
+        const st = editor[side];
+        const node = st.nodes[+h.dataset.node];
+        const parentKey = JSON.stringify(node.path.slice(0, -1));
+        const items = st.nodes.filter(n => n.path.length === node.path.length &&
+          typeof n.path[n.path.length - 1] === 'number' && JSON.stringify(n.path.slice(0, -1)) === parentKey);
+        drag = { node, items, drop: null };
+        e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData('text/plain', pathLabel(node.path));
+        const els = view.querySelectorAll('.t-line');
+        markLines(side, node, 't-drag-src', true);           // whole item is selected
+        let ghostH = (node.end - node.start + 1) * 22;
+        if (e.dataTransfer.setDragImage) {
+          const ghost = makeDragGhost(view, els, node.start, node.end);
+          ghostH = ghost.offsetHeight || ghostH;
+          e.dataTransfer.setDragImage(ghost, 16, 12);
+        }
+        scroller.start({ previewAbove: 12, previewBelow: ghostH - 12 });
+      });
+      // Pressing / hovering the handle selects the whole item
+      let pressed = null;
+      view.addEventListener('mousedown', (e) => {
+        const h = e.target.closest && e.target.closest('.t-drag');
+        if (!h) return;
+        pressed = editor[side].nodes[+h.dataset.node];
+        markLines(side, pressed, 't-drag-src', true);
+      });
+      document.addEventListener('mouseup', () => {
+        if (pressed && !drag) markLines(side, pressed, 't-drag-src', false);
+        pressed = null;
+      });
+      view.addEventListener('mouseover', (e) => {
+        const h = e.target.closest && e.target.closest('.t-drag');
+        if (h && !drag) highlightNode(side, +h.dataset.node, true, false);
+      });
+      view.addEventListener('mouseout', (e) => {
+        const h = e.target.closest && e.target.closest('.t-drag');
+        if (h) highlightNode(side, +h.dataset.node, false, false);
+      });
+      const setDrop = (drop) => {
+        if (drag.drop && drag.drop.el) drag.drop.el.classList.remove(drag.drop.cls);
+        drag.drop = drop;
+        if (drop && drop.el) drop.el.classList.add(drop.cls);
+      };
+      view.addEventListener('dragover', (e) => {
+        if (!drag) return;
+        const lineEl = e.target.closest && e.target.closest('.t-line');
+        const idx = lineEl ? +lineEl.dataset.i : -1;
+        const target = drag.items.find(n => n.start <= idx && idx <= n.end) || null;
+        if (!target) return setDrop(null);
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+        const from = drag.node.path[drag.node.path.length - 1];
+        const pos = dropPosition(view.querySelectorAll('.t-line'), target, from, e.clientY);
+        if (pos.to === from) return setDrop({ to: from });   // no-op: no marker
+        if (!drag.drop || drag.drop.el !== pos.el || drag.drop.cls !== pos.cls) setDrop(pos);
+      });
+      doDrop = () => {
+        if (!drag) return;
+        const path = drag.node.path, drop = drag.drop;
+        setDrop(null);
+        drag = null;
+        scroller.stop();
+        if (drop && drop.to !== path[path.length - 1]) moveNode(side, path, drop.to);
+        else renderTree(side);
+      };
+      view.addEventListener('drop', (e) => { if (drag) { e.preventDefault(); doDrop(); } });
+      view.addEventListener('dragend', () => {
+        scroller.stop();
+        if (!drag) return;
+        setDrop(null);
+        markLines(side, drag.node, 't-drag-src', false);
+        drag = null;
+      });
     }
 
     function getAt(root, path) {
@@ -1417,6 +1713,7 @@
 
     ['T'].forEach(side => {
       const view = document.getElementById(`tree${side}`);
+      bindDrag(side);
       view.addEventListener('click', (e) => {
         const btn = e.target.closest('.dup-btn');
         if (btn) {
