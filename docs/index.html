@@ -302,8 +302,51 @@
     .t-line { display: flex; align-items: center; white-space: pre; padding-right: 12px; }
     .t-line:hover { background: rgba(110,118,129,0.1); }
     .t-line.t-target { background: rgba(56,139,253,0.15); }
-    .t-line.t-flash { animation: tflash 1.4s ease-out; }
-    @keyframes tflash { from { background: rgba(63,185,80,0.45); } to { background: transparent; } }
+    .tree-view { position: relative; }
+    .t-line { overflow: hidden; max-height: 22px; }
+    /* Added node: slides/grows in, then glows green */
+    .t-line.t-flash-add { animation: tEnter 0.35s ease-out, tGlowAdd 2.2s ease-out; }
+    @keyframes tEnter {
+      from { max-height: 0; opacity: 0; transform: translateX(-12px); }
+      to   { max-height: 22px; opacity: 1; transform: none; }
+    }
+    @keyframes tGlowAdd {
+      0%, 35% { background: rgba(63,185,80,0.35); box-shadow: inset 3px 0 0 #3fb950; }
+      100%    { background: transparent; box-shadow: inset 3px 0 0 transparent; }
+    }
+    /* Edited node: amber glow */
+    .t-line.t-flash-edit { animation: tGlowEdit 1.8s ease-out; }
+    @keyframes tGlowEdit {
+      0%, 30% { background: rgba(210,153,34,0.35); box-shadow: inset 3px 0 0 #d29922; }
+      100%    { background: transparent; box-shadow: inset 3px 0 0 transparent; }
+    }
+    /* Removed node: turns red and collapses before it is deleted */
+    .t-line.t-leave { animation: tLeave 0.45s ease-in forwards; pointer-events: none; }
+    @keyframes tLeave {
+      0%   { background: rgba(248,81,73,0.45); box-shadow: inset 3px 0 0 #f85149; }
+      45%  { background: rgba(248,81,73,0.45); max-height: 22px; opacity: 1; transform: none; }
+      100% { background: rgba(248,81,73,0.2); max-height: 0; opacity: 0; transform: translateX(16px); }
+    }
+    /* Marker where a node was removed */
+    .t-line.t-gap { animation: tGap 1.6s ease-out; }
+    @keyframes tGap {
+      0%, 40% { box-shadow: inset 0 2px 0 #f85149; }
+      100%    { box-shadow: inset 0 2px 0 transparent; }
+    }
+    .tree-toast {
+      position: fixed; left: 50%; bottom: 24px; transform: translate(-50%, 20px);
+      background: #161b22; border: 1px solid #30363d; border-radius: 8px;
+      padding: 10px 14px; font-size: 13px; color: #c9d1d9; display: flex; gap: 14px; align-items: center;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.5); opacity: 0; pointer-events: none;
+      transition: opacity 0.2s, transform 0.2s; z-index: 300; max-width: calc(100vw - 32px);
+    }
+    .tree-toast.visible { opacity: 1; transform: translate(-50%, 0); pointer-events: auto; }
+    .tree-toast .toast-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+    .tree-toast code { font-family: 'SF Mono', 'Monaco', 'Menlo', monospace; font-size: 12px; color: #79c0ff; }
+    .tree-toast button { background: none; border: none; color: #58a6ff; cursor: pointer; font-size: 13px; font-weight: 600; }
+    @media (prefers-reduced-motion: reduce) {
+      .t-line.t-flash-add, .t-line.t-leave { animation-duration: 0.01s, 2.2s; }
+    }
     .t-gutter { width: 24px; flex-shrink: 0; text-align: center; }
     .t-fold { cursor: pointer; color: #6e7681; font-size: 10px; user-select: none; display: inline-block; }
     .t-fold:hover { color: #58a6ff; }
@@ -450,6 +493,8 @@
   </div>
 
   <div id="output"></div>
+
+  <div class="tree-toast" id="treeToast"><span class="toast-dot"></span><span class="toast-msg"></span><button onclick="undoTree('T'); hideToast()">Undo</button></div>
 
   <div class="tree-section tree-only" id="treeSection">
     <div class="input-panel">
@@ -833,6 +878,7 @@
     // Switching modes only toggles visibility, so each mode keeps its state.
     function setAppMode(mode) {
       document.body.classList.toggle('mode-tree', mode === 'tree');
+      if (mode !== 'tree') hideToast();
       document.getElementById('appModeCompare').classList.toggle('active', mode === 'compare');
       document.getElementById('appModeTree').classList.toggle('active', mode === 'tree');
     }
@@ -914,7 +960,7 @@
       if (msg) el._t = setTimeout(() => el.classList.remove('visible'), 4000);
     }
 
-    function renderTree(side, flashPath) {
+    function renderTree(side, flashPath, flashKind = 'add', gapIndex = null) {
       const st = editor[side];
       const view = document.getElementById(`tree${side}`);
       const scroll = view.scrollTop;
@@ -977,12 +1023,14 @@
         const node = st.nodes.find(n => JSON.stringify(n.path) === key);
         if (node) {
           const els = view.querySelectorAll('.t-line');
-          for (let i = node.start; i <= node.end; i++) els[i].classList.add('t-flash');
-          const first = els[node.start], last = els[node.end];
-          if (last.offsetTop + last.offsetHeight > view.scrollTop + view.clientHeight) {
-            view.scrollTop = Math.min(first.offsetTop - 8, last.offsetTop + last.offsetHeight - view.clientHeight + 8);
-          }
+          for (let i = node.start; i <= node.end; i++) els[i].classList.add(`t-flash-${flashKind}`);
+          scrollIntoTreeView(view, node.start, node.end);
         }
+      }
+      if (gapIndex !== null) {
+        const els = view.querySelectorAll('.t-line');
+        const el = els[Math.min(gapIndex, els.length - 1)];
+        if (el) { el.classList.add('t-gap'); scrollIntoTreeView(view, Math.min(gapIndex, els.length - 1)); }
       }
     }
 
@@ -1027,7 +1075,8 @@
         newPath = [...parentPath, newKey];
       }
       syncText(side);
-      renderTree(side, newPath);
+      renderTree(side, newPath, 'add');
+      showToast(`Added copy at <code>${escapeHtml(pathLabel(newPath))}</code>`, '#3fb950');
     }
 
     // Replace the value at `path` (handles the root)
@@ -1105,7 +1154,7 @@
       for (const k of Object.keys(parent)) rebuilt[k === oldKey ? newKey : k] = parent[k];
       setAt(side, parentPath, rebuilt);
       syncText(side);
-      renderTree(side, [...parentPath, newKey]);
+      renderTree(side, [...parentPath, newKey], 'edit');
       return null;
     }
 
@@ -1117,19 +1166,65 @@
       pushUndo(side);
       setAt(side, path, value);
       syncText(side);
-      renderTree(side, path);
+      renderTree(side, path, 'edit');
       return null;
     }
 
     function removeNode(side, path) {
       const st = editor[side];
-      const parent = getAt(st.root, path.slice(0, -1));
-      const last = path[path.length - 1];
-      pushUndo(side);
-      if (Array.isArray(parent)) parent.splice(last, 1);
-      else delete parent[last];
-      syncText(side);
-      renderTree(side);
+      if (st.busy) return;
+      const view = document.getElementById(`tree${side}`);
+      const key = JSON.stringify(path);
+      const node = st.nodes.find(n => JSON.stringify(n.path) === key);
+      const els = view.querySelectorAll('.t-line');
+      st.busy = true;
+      if (node) for (let i = node.start; i <= node.end; i++) els[i].classList.add('t-leave');
+
+      const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      setTimeout(() => {
+        st.busy = false;
+        const parent = getAt(st.root, path.slice(0, -1));
+        const last = path[path.length - 1];
+        pushUndo(side);
+        if (Array.isArray(parent)) parent.splice(last, 1);
+        else delete parent[last];
+        syncText(side);
+        renderTree(side, null, null, node ? node.start : null);
+        showToast(`Removed <code>${escapeHtml(pathLabel(path))}</code>`, '#f85149');
+      }, reduce ? 0 : 450);
+    }
+
+    // Smoothly scroll the tree so lines [start..end] are visible (centered when possible)
+    function scrollIntoTreeView(view, start, end = start) {
+      const els = view.querySelectorAll('.t-line');
+      const first = els[start], last = els[end];
+      if (!first || !last) return;
+      const top = first.offsetTop, bottom = last.offsetTop + 22;
+      const viewTop = view.scrollTop, viewBottom = viewTop + view.clientHeight;
+      if (top >= viewTop + 8 && bottom <= viewBottom - 8) return;   // already visible
+      const height = bottom - top;
+      const target = height < view.clientHeight
+        ? top - (view.clientHeight - height) / 2
+        : top - 8;
+      view.scrollTo({ top: Math.max(0, target), behavior: 'smooth' });
+    }
+
+    function pathLabel(path) {
+      if (!path.length) return 'root';
+      return path.map((k, i) => typeof k === 'number' ? `[${k}]` : (i ? '.' : '') + k).join('');
+    }
+
+    function showToast(html, color) {
+      const t = document.getElementById('treeToast');
+      t.querySelector('.toast-msg').innerHTML = html;
+      t.querySelector('.toast-dot').style.background = color;
+      t.classList.add('visible');
+      clearTimeout(t._t);
+      t._t = setTimeout(hideToast, 3500);
+    }
+
+    function hideToast() {
+      document.getElementById('treeToast').classList.remove('visible');
     }
 
     function syncText(side) {
