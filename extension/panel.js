@@ -16,7 +16,7 @@ const TEMPLATE = `<div class="rte-root" tabindex="-1">
       <label class="path-label">Path
         <input id="dbPath" type="text" placeholder="/" spellcheck="false">
       </label>
-      <button class="btn btn-secondary" id="fetchBtn" title="Reload data at this path from Realtime Database">Fetch</button>
+      <button class="btn btn-secondary" id="fetchBtn" title="Sync now: reload this path from Firebase">↻ Sync</button>
     </div>
     <div class="header-right">
       <span class="session" id="session" title=""><span class="dot"></span><span id="sessionText">No console session</span></span>
@@ -24,7 +24,10 @@ const TEMPLATE = `<div class="rte-root" tabindex="-1">
   </header>
 
   <div class="toolbar">
-    <div class="status" id="status"><span class="dot"></span><span id="statusText">Not loaded</span></div>
+    <div class="status-group">
+      <div class="status" id="status"><span class="dot"></span><span id="statusText">Not loaded</span></div>
+      <button class="sync-chip" id="syncChip" title="Auto-sync: click to turn on/off"><span class="dot"></span><span id="syncText">Auto-sync off</span></button>
+    </div>
     <div class="actions">
       <button class="file-btn" id="undoBtn" title="Undo (⌘/Ctrl+Z)" disabled>↶ Undo</button>
       <button class="file-btn" id="redoBtn" title="Redo (⇧⌘Z / Ctrl+Y)" disabled>↷ Redo</button>
@@ -41,6 +44,7 @@ const TEMPLATE = `<div class="rte-root" tabindex="-1">
     </div>
   </div>
 
+  <div class="notice" id="notice" hidden><span id="noticeText"></span><button class="file-btn" id="noticeLoad">Load latest (discard my edits)</button><button class="file-btn" id="noticeDismiss">Keep editing</button></div>
   <div class="error" id="error"><span id="errorText"></span><button class="file-btn" id="errorAction" hidden></button><button class="file-btn" id="errorDetails" hidden>Copy details</button></div>
 
   <main class="editor">
@@ -171,14 +175,14 @@ async function ensureSession(timeout = 7000) {
 }
 
 // ---------- REST (proxied through the background worker) ----------
-async function rtdb(method, { body, ifMatch } = {}, attempt = 0) {
-  const { db, path } = currentLocation();
+async function rtdb(method, { body, ifMatch, loc } = {}, attempt = 0) {
+  const { db, path } = loc || currentLocation();
   if (!db) throw new Error('Enter the database URL first.');
   const res = await chrome.runtime.sendMessage({ type: 'rtdb', method, url: buildUrl(db, path), body, ifMatch });
   if (!res) throw new Error('The extension did not respond. Reload this page.');
   if (res.noSession || (res.status === 401 && !res.manual)) {
     // no session yet, or it expired: get a fresh one from the console and retry once
-    if (attempt < 3 && await ensureSession()) return rtdb(method, { body, ifMatch }, attempt + 1);
+    if (attempt < 3 && await ensureSession()) return rtdb(method, { body, ifMatch, loc }, attempt + 1);
     const err = new Error("Couldn't pick up this console's database session. Reload the page and try again.");
     err.noSession = true;
     throw err;
@@ -189,8 +193,8 @@ async function rtdb(method, { body, ifMatch } = {}, attempt = 0) {
   // Database lives in another region → the error names the right URL
   const region = /https:\/\/[a-z0-9-]+\.[a-z0-9-]+\.firebasedatabase\.app/i.exec(msg);
   if (region && normalizeDb(region[0]) !== db && attempt < 2) {
-    $('dbUrl').value = normalizeDb(region[0]);
-    return rtdb(method, { body, ifMatch }, attempt + 1);
+    if (!loc) $('dbUrl').value = normalizeDb(region[0]);
+    return rtdb(method, { body, ifMatch, loc: loc ? { ...loc, db: normalizeDb(region[0]) } : undefined }, attempt + 1);
   }
   const err = new Error(friendlyError(res.status, msg));
   err.status = res.status;
@@ -198,7 +202,7 @@ async function rtdb(method, { body, ifMatch } = {}, attempt = 0) {
 }
 
 function friendlyError(status, msg) {
-  if (status === 401) return 'Console session expired. Reload this page, then Fetch again.';
+  if (status === 401) return 'Console session expired. Reload this page, then Sync again.';
   if (status === 403 || /permission denied/i.test(msg)) return `Permission denied — your account can't ${'access'} this path (same as in the console).\n(${msg})`;
   if (status === 404) return `Database not found. Check the database URL.\n(${msg})`;
   return `${status}: ${msg}`;
@@ -229,9 +233,13 @@ function applyServerData(data, etag, keepHistory) {
   state.loadedFrom = currentLocation();
   state.loadedAt = new Date();
   state.rollbackOf = null;
+  state.remote = null;
+  $('notice').hidden = true;
   tree.load(clone(data), { resetHistory: !keepHistory });
   syncText();
   refreshHistoryCount();
+  const key = state.loadedFrom.db + state.loadedFrom.path;
+  if (sync.key !== key) startSync();
 }
 
 function openPublish() {
@@ -271,6 +279,7 @@ function openPublish() {
 async function publish(force = false) {
   $('publishModal').hidden = true;
   $('conflictModal').hidden = true;
+  state.publishing = true;
   let data;
   try { data = currentValue(); } catch (e) { return showError(e.message); }
   setBusy('Publishing…', $('publishBtn'));
@@ -301,6 +310,7 @@ async function publish(force = false) {
       showError(e.message);
     }
   } finally {
+    state.publishing = false;
     setBusy(null, $('publishBtn'));
     refreshStatus();
   }
@@ -533,6 +543,124 @@ function downloadJson(data, name) {
   setTimeout(() => URL.revokeObjectURL(a.href), 1000);
 }
 
+// ---------- Live sync ----------
+// Keeps the editor in step with Firebase. Uses the Realtime Database streaming
+// API (server-sent events) as a change signal; each change triggers one GET so
+// the data and its ETag are exactly what the REST API returns. Falls back to
+// polling every 10 s if streaming isn't available.
+const sync = { enabled: true, mode: 'off', es: null, poll: null, timer: null, busy: false, again: false, fails: 0, key: '' };
+const POLL_MS = 10000;
+
+function setSyncMode(mode) {
+  sync.mode = mode;
+  const chip = $('syncChip');
+  chip.className = `sync-chip ${mode}`;
+  const text = {
+    live: ['Live', 'Auto-sync on: changes made in Firebase appear here right away. Click to turn off.'],
+    connecting: ['Connecting…', 'Connecting to Firebase for live updates…'],
+    polling: ['Auto-sync · 10 s', 'Live updates unavailable; checking Firebase every 10 seconds. Click to turn off.'],
+    off: ['Auto-sync off', 'Auto-sync is off. Click to turn it on, or use ↻ Sync.'],
+  }[mode];
+  $('syncText').textContent = text[0];
+  chip.title = text[1];
+}
+
+function stopSync() {
+  if (sync.es) { sync.es.close(); sync.es = null; }
+  clearInterval(sync.poll); sync.poll = null;
+  clearTimeout(sync.timer);
+  sync.key = '';
+}
+
+async function startSync() {
+  stopSync();
+  if (!sync.enabled || !state.loadedFrom) return setSyncMode('off');
+  const loc = state.loadedFrom;
+  const key = loc.db + loc.path;
+  sync.key = key;
+  setSyncMode('connecting');
+  let tok = await chrome.runtime.sendMessage({ type: 'sessionToken' });
+  if (!tok && await ensureSession()) tok = await chrome.runtime.sendMessage({ type: 'sessionToken' });
+  if (sync.key !== key) return;
+  if (!tok || typeof EventSource === 'undefined') return startPolling(key);
+  const url = new URL(buildUrl(loc.db, loc.path));
+  url.searchParams.set(tok.kind === 'firebase' ? 'auth' : 'access_token', tok.token);
+  let es;
+  try { es = new EventSource(url.toString()); } catch { return startPolling(key); }
+  sync.es = es;
+  const onEvent = () => { sync.fails = 0; if (sync.mode !== 'live') setSyncMode('live'); scheduleSync(); };
+  es.addEventListener('put', onEvent);
+  es.addEventListener('patch', onEvent);
+  es.addEventListener('keep-alive', () => { if (sync.mode !== 'live') setSyncMode('live'); });
+  es.addEventListener('auth_revoked', () => { es.close(); retryStream(key); });   // token expired
+  es.addEventListener('cancel', () => { es.close(); startPolling(key); });       // e.g. permission change
+  es.onerror = () => {
+    if (es.readyState === EventSource.CLOSED) retryStream(key);
+    else setSyncMode('connecting');                                              // browser is reconnecting
+  };
+}
+
+function retryStream(key) {
+  if (sync.key !== key) return;
+  sync.fails++;
+  if (sync.fails > 2) return startPolling(key);
+  clearTimeout(sync.timer);
+  sync.timer = setTimeout(async () => { await ensureSession(); if (sync.key === key) startSync(); }, 1500 * sync.fails);
+}
+
+function startPolling(key) {
+  if (sync.key !== key) return;
+  if (sync.es) { sync.es.close(); sync.es = null; }
+  clearInterval(sync.poll);
+  setSyncMode('polling');
+  let n = 0;
+  sync.poll = setInterval(() => {
+    syncFromServer();
+    if (++n % 6 === 0) { sync.fails = 0; startSync(); }   // try live updates again every minute
+  }, POLL_MS);
+}
+
+function scheduleSync() {
+  clearTimeout(sync.timer);
+  sync.timer = setTimeout(syncFromServer, 350);
+}
+
+async function syncFromServer({ manual = false } = {}) {
+  const loc = state.loadedFrom;
+  if (!loc) return;
+  if (sync.busy || state.publishing) { sync.again = true; return; }
+  sync.busy = true;
+  try {
+    const { data, etag } = await rtdb('GET', { loc });
+    if (state.loadedFrom !== loc) return;
+    if (JSON.stringify(data) === JSON.stringify(state.original)) {
+      if (etag) state.etag = etag;
+      if (manual) showToast('Already up to date.', '#3fb950', null);
+      return;
+    }
+    if (!isDirty()) {
+      const changes = listChanges(state.original, data);
+      state.original = data;
+      state.etag = etag;
+      state.loadedAt = new Date();
+      if (state.mode === 'text') { tree.root = clone(data); syncText(); }
+      else { tree.refresh(clone(data), changes.map((c) => c.path)); syncText(); }
+      showToast(`Updated from Firebase · ${changes.length} change${changes.length === 1 ? '' : 's'}`, '#58a6ff', null);
+      refreshStatus();
+    } else {
+      // Don't overwrite the user's edits: tell them, and let them choose
+      state.remote = { data, etag };
+      $('noticeText').textContent = 'This node changed in Firebase while you were editing.';
+      $('notice').hidden = false;
+    }
+  } catch (e) {
+    if (manual) showError(e.message);
+  } finally {
+    sync.busy = false;
+    if (sync.again) { sync.again = false; scheduleSync(); }
+  }
+}
+
 // ---------- Mount / open ----------
 /** Build the editor inside `shadowRoot`. Call once. */
 export function mount(shadowRoot) {
@@ -554,7 +682,33 @@ export function mount(shadowRoot) {
   tree.load(undefined);
 
   // ---------- Wiring ----------
-  $('fetchBtn').addEventListener('click', () => fetchData());
+  $('fetchBtn').addEventListener('click', () => {
+    const loc = currentLocation(), loaded = state.loadedFrom;
+    // Same node already loaded: sync it (keeps your edits if you have any); otherwise load the typed path
+    if (loaded && loc.db === loaded.db && loc.path === loaded.path) {
+      if (isDirty()) return fetchData();          // asks before discarding edits
+      return syncFromServer({ manual: true });
+    }
+    fetchData();
+  });
+  $('syncChip').addEventListener('click', () => {
+    sync.enabled = !sync.enabled;
+    chrome.storage.local.set({ autoSync: sync.enabled });
+    if (sync.enabled) { startSync(); showToast('Auto-sync on.', '#3fb950', null); }
+    else { stopSync(); setSyncMode('off'); showToast('Auto-sync off — use ↻ Sync to refresh.', '#8b949e', null); }
+  });
+  $('noticeLoad').addEventListener('click', () => {
+    if (!state.remote) return;
+    applyServerData(state.remote.data, state.remote.etag, false);
+    showToast('Loaded the latest data from Firebase.', '#58a6ff', null);
+    refreshStatus();
+  });
+  $('noticeDismiss').addEventListener('click', () => { $('notice').hidden = true; });
+  chrome.storage.local.get('autoSync').then(({ autoSync }) => {
+    sync.enabled = autoSync !== false;
+    if (!sync.enabled) setSyncMode('off');
+  });
+  setSyncMode('off');
   $('dbPath').addEventListener('keydown', (e) => { if (e.key === 'Enter') fetchData(); });
   $('dbUrl').addEventListener('keydown', (e) => { if (e.key === 'Enter') fetchData(); });
   $('publishBtn').addEventListener('click', openPublish);

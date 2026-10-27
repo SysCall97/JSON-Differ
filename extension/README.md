@@ -39,6 +39,15 @@ If the console's layout changes and the tab can't be added, a floating **{ } Tre
 
 Shortcuts: ⌘/Ctrl+Z undo · ⇧⌘Z / Ctrl+Y redo · ⌘/Ctrl+S publish.
 
+## Live sync
+
+The editor stays in step with Firebase:
+
+- The **Live** chip in the toolbar means auto-sync is on. Changes made elsewhere (the console's *Data* tab, your app, a teammate) appear in the tree within a second, and the changed lines glow.
+- If you have **unpublished edits**, they are never overwritten. A yellow bar says the node changed in Firebase, and you choose **Load latest** (discard your edits) or **Keep editing**. Publishing in that state shows the "changed on the server" warning, as before.
+- If live updates aren't available, the chip shows **Auto-sync · 10 s** and the editor checks Firebase every 10 seconds instead.
+- Click the chip to turn auto-sync off or on; the choice is remembered. **↻ Sync** (next to the path) refreshes immediately.
+
 ## How the session works
 
 The console talks to Realtime Database with your signed-in credential. The extension looks **only at traffic going to `*.firebaseio.com` / `*.firebasedatabase.app`**, picks that credential up, and uses it for its own REST calls to the same database.

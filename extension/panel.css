@@ -272,3 +272,24 @@ p.hint code { font-size: 11px; }
 .t-btn.t-add { border-color: #388bfd; color: #58a6ff; font-size: 15px; }
 .t-add:hover { background: #1f6feb; color: #fff; }
 .t-add-row .t-input { font-family: 'SF Mono', Monaco, Menlo, monospace; font-size: 12px; }
+
+/* Live sync */
+.status-group { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.sync-chip {
+  display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 12px;
+  border: 1px solid #30363d; background: #0d1117; color: #8b949e; font-size: 11px; cursor: pointer; white-space: nowrap;
+}
+.sync-chip:hover { border-color: #484f58; color: #c9d1d9; }
+.sync-chip .dot { width: 7px; height: 7px; border-radius: 50%; background: #484f58; }
+.sync-chip.live { color: #7ee787; border-color: #238636; }
+.sync-chip.live .dot { background: #3fb950; animation: livePulse 2s ease-in-out infinite; }
+@keyframes livePulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(63,185,80,0.6); } 50% { box-shadow: 0 0 0 4px rgba(63,185,80,0); } }
+.sync-chip.connecting .dot { background: #58a6ff; animation: pulse 1s infinite; }
+.sync-chip.polling { color: #e3b341; border-color: #9e6a03; }
+.sync-chip.polling .dot { background: #d29922; }
+.notice {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 8px 16px; font-size: 12px;
+  color: #e3b341; background: rgba(210,153,34,0.12); border-bottom: 1px solid #30363d;
+}
+.notice[hidden] { display: none; }
+.notice #noticeText { flex: 1; min-width: 200px; }

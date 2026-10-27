@@ -26,6 +26,10 @@ chrome.runtime.onMessage.addListener((msg, _sender, reply) => {
     }));
     return true;
   }
+  if (msg.type === 'sessionToken') {
+    getToken().then((t) => reply(t ? { token: t.token, kind: t.kind } : null));
+    return true;
+  }
   if (msg.type === 'sessionInfo') {
     sessionInfo().then(reply);
     return true;

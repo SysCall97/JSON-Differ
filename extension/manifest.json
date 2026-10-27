@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "RTDB Tree Editor",
-  "version": "1.6.0",
+  "version": "1.7.0",
   "description": "Adds a \"Tree editor\" tab to Firebase Realtime Database in the console: edit the JSON as a tree, publish it with your console permissions, and roll back from snapshots.",
   "icons": {
     "16": "icons/icon16.png",

@@ -44,6 +44,34 @@ export class TreeEditor {
 
   get value() { return this.root; }
 
+  /**
+   * Replace the data with a newer server version without an undo step
+   * (used by live sync). Folded nodes stay folded; changed paths glow.
+   */
+  refresh(value, changedPaths = []) {
+    const folded = this.nodes
+      .filter((n) => { const v = this._safeGet(n.path); return isObj(v) && this.collapsed.has(v); })
+      .map((n) => n.path);
+    this.root = value;
+    this.collapsed = new WeakSet();
+    for (const p of folded) { const v = this._safeGet(p); if (isObj(v)) this.collapsed.add(v); }
+    this.undoStack = [];
+    this.redoStack = [];
+    this.render();
+    const els = this.view.querySelectorAll('.t-line');
+    for (const p of changedPaths.slice(0, 60)) {
+      let q = p, node = this._find(q);
+      while (!node && q.length) { q = q.slice(0, -1); node = this._find(q); }   // removed → glow its parent
+      if (node) for (let i = node.start; i <= node.end; i++) els[i] && els[i].classList.add('t-flash-edit');
+    }
+  }
+
+  _safeGet(path) {
+    let o = this.root;
+    for (const k of path) { if (!isObj(o)) return undefined; o = o[k]; }
+    return o;
+  }
+
   /** Replace the whole value as one undoable step. */
   replace(value, { flash = true } = {}) {
     this._pushUndo();
