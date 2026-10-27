@@ -71,11 +71,13 @@ export class TreeEditor {
       if (isObj(v)) return `<span class="t-edit" ${attr}>${Array.isArray(v) ? '[]' : '{}'}</span>`;
       return `<span class="t-lit t-edit" ${attr}>${v}</span>`;
     };
-    const line = (code, gutter = '', btnId = null, handle = '') => {
-      const btns = btnId !== null
-        ? `<button class="t-btn t-dup" data-node="${btnId}" title="Duplicate as next sibling">+</button>` +
+    const line = (code, gutter = '', btnId = null, handle = '', addId = null) => {
+      const add = addId !== null
+        ? `<button class="t-btn t-add" data-node="${addId}" title="Add a child (key: value) inside this node" aria-label="Add child">+</button>` : '';
+      const btns = add + (btnId !== null
+        ? `<button class="t-btn t-dup" data-node="${btnId}" title="Duplicate — copy this node and paste it as the next sibling" aria-label="Duplicate"><svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="5" width="9.5" height="9.5" rx="2"/><path d="M11 5V3a1.5 1.5 0 0 0-1.5-1.5h-6A1.5 1.5 0 0 0 2 3v6A1.5 1.5 0 0 0 3.5 10.5H5"/></svg></button>` +
           `<button class="t-btn t-del" data-node="${btnId}" title="Remove">−</button>`
-        : '';
+        : '');
       lines.push(`<div class="t-line" data-i="${lines.length}"><span class="t-handle">${handle}</span><span class="t-gutter">${gutter}</span><span class="t-code">${code}</span>${btns}</div>`);
     };
 
@@ -98,15 +100,15 @@ export class TreeEditor {
         const entries = isArr ? v.map((x, i) => [i, x]) : Object.entries(v);
         const [o, c] = isArr ? ['[', ']'] : ['{', '}'];
         if (entries.length === 0) {
-          line(indent + keyHtml + prim(v, id) + comma, '', btnId, handle);
+          line(indent + keyHtml + prim(v, id) + comma, '', btnId, handle, id);
         } else if (this.collapsed.has(v)) {
           const label = `${entries.length} ${isArr ? 'item' : 'key'}${entries.length > 1 ? 's' : ''}`;
           line(`${indent}${keyHtml}${o}<span class="t-preview"> … ${label} </span>${c}${comma}`,
-            `<span class="t-fold closed" data-node="${id}">▼</span>`, btnId, handle);
+            `<span class="t-fold closed" data-node="${id}">▼</span>`, btnId, handle, id);
         } else {
           line(indent + keyHtml + o, `<span class="t-fold" data-node="${id}">▼</span>`, null, handle);
           entries.forEach(([k, x], i) => walk(x, k, [...path, k], depth + 1, i === entries.length - 1));
-          line(indent + c + comma, '', btnId);
+          line(indent + c + comma, '', btnId, '', id);
         }
       } else {
         line(indent + keyHtml + prim(v, id) + comma, '', btnId, handle);
@@ -121,6 +123,7 @@ export class TreeEditor {
     walk(this.root, null, [], 0, true);
     view.innerHTML = lines.join('');
     view.scrollTop = scroll;
+    this._mountAddRow();
 
     const els = view.querySelectorAll('.t-line');
     if (flashPath) {
@@ -165,6 +168,69 @@ export class TreeEditor {
     this.render(newPath, 'add');
     this._changed();
     this._toast(`Added copy at <code>${esc(pathLabel(newPath))}</code>`, '#3fb950');
+  }
+
+  /** Open the inline "add child" row for the object/array at `path`. */
+  startAdd(path) {
+    const v = this._get(path);
+    if (!isObj(v)) return;
+    this.collapsed.delete(v);
+    this.adding = { path, draft: { key: '', value: '' }, focus: true };
+    this.render();
+  }
+
+  cancelAdd() {
+    this.adding = null;
+    this.render();
+  }
+
+  /** Add `key: value` (or an array item) to the node at `path`. Returns an error message or null. */
+  addChild(path, key, text) {
+    const target = this._get(path);
+    if (!isObj(target)) return 'This node can no longer have children.';
+    if (!text.trim()) return 'Enter a value.';
+    let value;
+    try { value = JSON.parse(text); } catch { value = text; }
+    let newPath;
+    if (Array.isArray(target)) {
+      this._pushUndo();
+      target.push(value);
+      newPath = [...path, target.length - 1];
+    } else {
+      if (!key.trim()) return 'Enter a key.';
+      if (/[.#$\[\]\/]/.test(key)) return 'Keys cannot contain . # $ [ ] or /';
+      if (has(target, key)) return `"${key}" already exists here.`;
+      this._pushUndo();
+      target[key] = value;
+      newPath = [...path, key];
+    }
+    this.adding = null;
+    this.render(newPath, 'add');
+    this._changed();
+    this._toast(`Added <code>${esc(pathLabel(newPath))}</code>`, '#3fb950');
+    return null;
+  }
+
+  _mountAddRow() {
+    if (!this.adding) return;
+    const node = this._find(this.adding.path);
+    const target = node && this._get(this.adding.path);
+    if (!node || !isObj(target)) { this.adding = null; return; }
+    const els = this.view.querySelectorAll('.t-line');
+    const isArray = Array.isArray(target);
+    const empty = (isArray ? target.length : Object.keys(target).length) === 0;
+    const { row, focus } = buildAddRow({
+      isArray, nextIndex: isArray ? target.length : 0, depth: this.adding.path.length + 1, draft: this.adding.draft,
+      onSubmit: (k, val) => this.addChild(this.adding.path, k, val),
+      onCancel: () => this.cancelAdd(),
+    });
+    if (empty) els[node.start].after(row); else els[node.end].before(row);
+    if (this.adding.focus) {
+      this.adding.focus = false;
+      focus();
+      const r = row.getBoundingClientRect(), v = this.view.getBoundingClientRect();
+      if (r.bottom > v.bottom || r.top < v.top) row.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    }
   }
 
   /** Move an array item to index `to` within the same array (reorder). */
@@ -363,6 +429,7 @@ export class TreeEditor {
       const btn = e.target.closest('.t-btn');
       if (btn) {
         const path = this.nodes[+btn.dataset.node].path;
+        if (btn.classList.contains('t-add')) return this.startAdd(path);
         return btn.classList.contains('t-del') ? this.remove(path) : this.duplicate(path);
       }
       const editEl = e.target.closest('[data-edit]');
@@ -463,6 +530,45 @@ export class TreeEditor {
       if (btn) this._highlight(+btn.dataset.node, false, btn.classList.contains('t-del'));
     });
   }
+}
+
+// Inline "add child" row, like the + in the Firebase console
+function buildAddRow({ isArray, nextIndex, depth, draft, onSubmit, onCancel }) {
+  const el = (tag, cls, props = {}) => Object.assign(document.createElement(tag), { className: cls, ...props });
+  const row = el('div', 't-add-row');
+  row.style.paddingLeft = `calc(40px + ${depth * 2}ch)`;
+  const keyEl = isArray
+    ? el('span', 't-add-index', { textContent: `[${nextIndex}]`, title: 'New item goes at the end of the array' })
+    : el('input', 't-input t-add-key', { placeholder: 'key', value: draft.key || '', spellcheck: false });
+  const valEl = el('input', 't-input t-add-value', {
+    placeholder: 'value', value: draft.value || '', spellcheck: false,
+    title: 'JSON value: "text", 42, true, null, {} or [] — plain text is saved as a string',
+  });
+  const ok = el('button', 't-add-ok', { textContent: 'Add', type: 'button' });
+  const cancel = el('button', 't-add-cancel', { textContent: 'Cancel', type: 'button' });
+  const err = el('span', 't-add-err');
+  row.append(keyEl, el('span', 't-add-colon', { textContent: ':' }), valEl, ok, cancel, err);
+  const submit = () => {
+    const msg = onSubmit(isArray ? null : keyEl.value, valEl.value);
+    if (msg) err.textContent = msg;
+  };
+  row.addEventListener('input', (e) => {
+    err.textContent = '';
+    if (e.target === keyEl) draft.key = keyEl.value;
+    if (e.target === valEl) draft.value = valEl.value;
+  });
+  row.addEventListener('keydown', (e) => {
+    e.stopPropagation();
+    if (e.key === 'Escape') { e.preventDefault(); onCancel(); }
+    else if (e.key === 'Enter') {
+      e.preventDefault();
+      if (e.target === keyEl && !valEl.value) valEl.focus(); else submit();
+    }
+  });
+  row.addEventListener('click', (e) => e.stopPropagation());
+  ok.addEventListener('click', submit);
+  cancel.addEventListener('click', onCancel);
+  return { row, focus: () => (isArray ? valEl : keyEl).focus() };
 }
 
 // Auto-scroll while dragging near (or past) the top/bottom edge of the tree.

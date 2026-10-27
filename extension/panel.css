@@ -112,6 +112,8 @@ code { font-family: 'SF Mono', Monaco, Menlo, monospace; font-size: 12px; }
   transition: opacity 0.15s, background 0.15s;
 }
 .t-btn.t-del { margin-left: 4px; border-color: #da3633; color: #f85149; }
+.t-btn { display: inline-flex; align-items: center; justify-content: center; }
+.t-btn svg { display: block; }
 .t-line:hover .t-btn { opacity: 1; }
 .t-dup:hover { background: #238636; color: #fff; }
 .t-del:hover { background: #da3633; color: #fff; }
@@ -250,3 +252,23 @@ p.hint code { font-size: 11px; }
 .t-scroll-band { pointer-events: auto; transition: background 0.2s; }
 .t-scroll-band.top.active { background: linear-gradient(to bottom, rgba(56,139,253,0.28), transparent); }
 .t-scroll-band.bottom.active { background: linear-gradient(to top, rgba(56,139,253,0.28), transparent); }
+
+.t-add-row {
+  display: flex; align-items: center; gap: 6px; min-height: 30px; padding-right: 12px; white-space: nowrap;
+  background: rgba(56,139,253,0.1); box-shadow: inset 3px 0 0 #58a6ff; animation: tAddIn 0.2s ease-out;
+}
+@keyframes tAddIn { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+.t-add-row .t-input { height: 22px; width: 18ch; }
+.t-add-row .t-add-key { color: #79c0ff; }
+.t-add-index, .t-add-colon { color: #8b949e; }
+.t-add-ok, .t-add-cancel {
+  height: 22px; padding: 0 10px; border-radius: 4px; font: 500 11px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; cursor: pointer;
+}
+.t-add-ok { background: #1f6feb; border: 1px solid #1f6feb; color: #fff; }
+.t-add-ok:hover { background: #388bfd; }
+.t-add-cancel { background: transparent; border: 1px solid #30363d; color: #c9d1d9; }
+.t-add-cancel:hover { background: #30363d; }
+.t-add-err { color: #f85149; font-size: 11px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+.t-btn.t-add { border-color: #388bfd; color: #58a6ff; font-size: 15px; }
+.t-add:hover { background: #1f6feb; color: #fff; }
+.t-add-row .t-input { font-family: 'SF Mono', Monaco, Menlo, monospace; font-size: 12px; }

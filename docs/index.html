@@ -362,6 +362,8 @@
       color: #3fb950; font-size: 14px; line-height: 15px; padding: 0;
       cursor: pointer; opacity: 0.3; transition: opacity 0.15s, background 0.15s;
     }
+    .dup-btn { display: inline-flex; align-items: center; justify-content: center; }
+    .dup-btn svg { display: block; }
     .t-line:hover .dup-btn { opacity: 1; }
     .dup-btn:hover { background: #238636; color: #fff; opacity: 1; }
     .del-btn { margin-left: 4px; border-color: #da3633; color: #f85149; }
@@ -395,6 +397,25 @@
     .t-scroll-band { pointer-events: auto; transition: background 0.2s; }
     .t-scroll-band.top.active { background: linear-gradient(to bottom, rgba(56,139,253,0.28), transparent); }
     .t-scroll-band.bottom.active { background: linear-gradient(to top, rgba(56,139,253,0.28), transparent); }
+    .t-add-row {
+      display: flex; align-items: center; gap: 6px; min-height: 30px; padding-right: 12px; white-space: nowrap;
+      background: rgba(56,139,253,0.1); box-shadow: inset 3px 0 0 #58a6ff; animation: tAddIn 0.2s ease-out;
+    }
+    @keyframes tAddIn { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+    .t-add-row .t-input { height: 22px; width: 18ch; }
+    .t-add-row .t-add-key { color: #79c0ff; }
+    .t-add-index, .t-add-colon { color: #8b949e; }
+    .t-add-ok, .t-add-cancel {
+      height: 22px; padding: 0 10px; border-radius: 4px; font: 500 11px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; cursor: pointer;
+    }
+    .t-add-ok { background: #1f6feb; border: 1px solid #1f6feb; color: #fff; }
+    .t-add-ok:hover { background: #388bfd; }
+    .t-add-cancel { background: transparent; border: 1px solid #30363d; color: #c9d1d9; }
+    .t-add-cancel:hover { background: #30363d; }
+    .t-add-err { color: #f85149; font-size: 11px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+    .dup-btn.add-btn { border-color: #388bfd; color: #58a6ff; font-size: 15px; }
+    .add-btn:hover { background: #1f6feb; color: #fff; }
+    .t-add-row .t-input { font-family: 'SF Mono', 'Monaco', 'Menlo', monospace; font-size: 12px; }
     .t-line.t-drop-before { box-shadow: inset 0 3px 0 #58a6ff; }
     .t-line.t-drop-after { box-shadow: inset 0 -3px 0 #58a6ff; }
     .t-line.t-swapping { background: #1c2d44 !important; box-shadow: 0 2px 10px rgba(0,0,0,0.45), inset 3px 0 0 #58a6ff; }
@@ -1116,11 +1137,13 @@
         if (v !== null && typeof v === 'object') return `<span class="t-edit" ${attr}>${Array.isArray(v) ? '[]' : '{}'}</span>`;
         return `<span class="t-lit t-edit" ${attr}>${v}</span>`;
       };
-      const line = (code, gutter = '', plusId = null, handle = '') => {
-        const plus = plusId !== null
-          ? `<button class="dup-btn" data-node="${plusId}" title="Duplicate this node as the next sibling">+</button>` +
+      const line = (code, gutter = '', plusId = null, handle = '', addId = null) => {
+        const add = addId !== null
+          ? `<button class="dup-btn add-btn" data-node="${addId}" title="Add a child (key: value) inside this node" aria-label="Add child">+</button>` : '';
+        const plus = add + (plusId !== null
+          ? `<button class="dup-btn" data-node="${plusId}" title="Duplicate — copy this node and paste it as the next sibling" aria-label="Duplicate"><svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="5" width="9.5" height="9.5" rx="2"/><path d="M11 5V3a1.5 1.5 0 0 0-1.5-1.5h-6A1.5 1.5 0 0 0 2 3v6A1.5 1.5 0 0 0 3.5 10.5H5"/></svg></button>` +
             `<button class="dup-btn del-btn" data-node="${plusId}" title="Remove this node">−</button>`
-          : '';
+          : '');
         lines.push(`<div class="t-line" data-i="${lines.length}"><span class="t-handle">${handle}</span><span class="t-gutter">${gutter}</span><span class="t-code">${code}</span>${plus}</div>`);
       };
 
@@ -1143,15 +1166,15 @@
           const entries = isArr ? v.map((x, i) => [i, x]) : Object.entries(v);
           const [o, c] = isArr ? ['[', ']'] : ['{', '}'];
           if (entries.length === 0) {
-            line(indent + keyHtml + prim(v, id) + comma, '', plusId, handle);
+            line(indent + keyHtml + prim(v, id) + comma, '', plusId, handle, id);
           } else if (st.collapsed.has(v)) {
             const fold = `<span class="t-fold closed" data-node="${id}">▼</span>`;
             const label = `${entries.length} ${isArr ? 'item' : 'key'}${entries.length > 1 ? 's' : ''}`;
-            line(`${indent}${keyHtml}${o}<span class="t-preview"> … ${label} </span>${c}${comma}`, fold, plusId, handle);
+            line(`${indent}${keyHtml}${o}<span class="t-preview"> … ${label} </span>${c}${comma}`, fold, plusId, handle, id);
           } else {
             line(indent + keyHtml + o, `<span class="t-fold" data-node="${id}">▼</span>`, null, handle);
             entries.forEach(([k, x], i) => walk(x, k, [...path, k], depth + 1, i === entries.length - 1));
-            line(indent + c + comma, '', plusId);
+            line(indent + c + comma, '', plusId, '', id);
           }
         } else {
           line(indent + keyHtml + prim(v, id) + comma, '', plusId, handle);
@@ -1162,6 +1185,7 @@
       walk(st.root, null, [], 0, true);
       view.innerHTML = lines.join('');
       view.scrollTop = scroll;
+      mountAddRow(side);
 
       if (flashPath) {
         const key = JSON.stringify(flashPath);
@@ -1177,6 +1201,111 @@
         const el = els[Math.min(gapIndex, els.length - 1)];
         if (el) { el.classList.add('t-gap'); scrollIntoTreeView(view, Math.min(gapIndex, els.length - 1)); }
       }
+    }
+
+    // ---------- Add child (the + button), like the Firebase console ----------
+    function startAdd(side, path) {
+      const st = editor[side];
+      const v = getAt(st.root, path);
+      if (v === null || typeof v !== 'object') return;
+      st.collapsed.delete(v);
+      st.adding = { path, draft: { key: '', value: '' }, focus: true };
+      renderTree(side);
+    }
+
+    function cancelAdd(side) {
+      editor[side].adding = null;
+      renderTree(side);
+    }
+
+    function addChild(side, path, key, text) {
+      const st = editor[side];
+      const target = getAt(st.root, path);
+      if (target === null || typeof target !== 'object') return 'This node can no longer have children.';
+      if (!text.trim()) return 'Enter a value.';
+      let value;
+      try { value = JSON.parse(text); } catch { value = text; }
+      let newPath;
+      if (Array.isArray(target)) {
+        pushUndo(side);
+        target.push(value);
+        newPath = [...path, target.length - 1];
+      } else {
+        if (!key.trim()) return 'Enter a key.';
+        if (Object.prototype.hasOwnProperty.call(target, key)) return `"${key}" already exists here.`;
+        pushUndo(side);
+        target[key] = value;
+        newPath = [...path, key];
+      }
+      st.adding = null;
+      syncText(side);
+      renderTree(side, newPath, 'add');
+      showToast(`Added <code>${escapeHtml(pathLabel(newPath))}</code>`, '#3fb950');
+      return null;
+    }
+
+    function mountAddRow(side) {
+      const st = editor[side];
+      if (!st.adding) return;
+      const key = JSON.stringify(st.adding.path);
+      const node = st.nodes.find(n => JSON.stringify(n.path) === key);
+      const target = node && getAt(st.root, st.adding.path);
+      if (!node || target === null || typeof target !== 'object') { st.adding = null; return; }
+      const view = document.getElementById(`tree${side}`);
+      const els = view.querySelectorAll('.t-line');
+      const isArray = Array.isArray(target);
+      const empty = (isArray ? target.length : Object.keys(target).length) === 0;
+      const { row, focus } = buildAddRow({
+        isArray, nextIndex: isArray ? target.length : 0, depth: st.adding.path.length + 1, draft: st.adding.draft,
+        onSubmit: (k, val) => addChild(side, st.adding.path, k, val),
+        onCancel: () => cancelAdd(side),
+      });
+      if (empty) els[node.start].after(row); else els[node.end].before(row);
+      if (st.adding.focus) {
+        st.adding.focus = false;
+        focus();
+        const r = row.getBoundingClientRect(), v = view.getBoundingClientRect();
+        if (r.bottom > v.bottom || r.top < v.top) row.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      }
+    }
+
+    // Inline "add child" row, like the + in the Firebase console
+    function buildAddRow({ isArray, nextIndex, depth, draft, onSubmit, onCancel }) {
+      const el = (tag, cls, props = {}) => Object.assign(document.createElement(tag), { className: cls, ...props });
+      const row = el('div', 't-add-row');
+      row.style.paddingLeft = `calc(40px + ${depth * 2}ch)`;
+      const keyEl = isArray
+        ? el('span', 't-add-index', { textContent: `[${nextIndex}]`, title: 'New item goes at the end of the array' })
+        : el('input', 't-input t-add-key', { placeholder: 'key', value: draft.key || '', spellcheck: false });
+      const valEl = el('input', 't-input t-add-value', {
+        placeholder: 'value', value: draft.value || '', spellcheck: false,
+        title: 'JSON value: "text", 42, true, null, {} or [] — plain text is saved as a string',
+      });
+      const ok = el('button', 't-add-ok', { textContent: 'Add', type: 'button' });
+      const cancel = el('button', 't-add-cancel', { textContent: 'Cancel', type: 'button' });
+      const err = el('span', 't-add-err');
+      row.append(keyEl, el('span', 't-add-colon', { textContent: ':' }), valEl, ok, cancel, err);
+      const submit = () => {
+        const msg = onSubmit(isArray ? null : keyEl.value, valEl.value);
+        if (msg) err.textContent = msg;
+      };
+      row.addEventListener('input', (e) => {
+        err.textContent = '';
+        if (e.target === keyEl) draft.key = keyEl.value;
+        if (e.target === valEl) draft.value = valEl.value;
+      });
+      row.addEventListener('keydown', (e) => {
+        e.stopPropagation();
+        if (e.key === 'Escape') { e.preventDefault(); onCancel(); }
+        else if (e.key === 'Enter') {
+          e.preventDefault();
+          if (e.target === keyEl && !valEl.value) valEl.focus(); else submit();
+        }
+      });
+      row.addEventListener('click', (e) => e.stopPropagation());
+      ok.addEventListener('click', submit);
+      cancel.addEventListener('click', onCancel);
+      return { row, focus: () => (isArray ? valEl : keyEl).focus() };
     }
 
     // ---------- Drag & drop: reorder items within an array ----------
@@ -1718,6 +1847,7 @@
         const btn = e.target.closest('.dup-btn');
         if (btn) {
           const path = editor[side].nodes[+btn.dataset.node].path;
+          if (btn.classList.contains('add-btn')) return startAdd(side, path);
           return btn.classList.contains('del-btn') ? removeNode(side, path) : duplicateNode(side, path);
         }
         const editEl = e.target.closest('[data-edit]');
