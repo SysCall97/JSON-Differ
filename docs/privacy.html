@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>RTDB Tree Editor — Privacy Policy</title>
+  <style>
+    :root { color-scheme: dark; }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: #0d1117; color: #c9d1d9; font: 15px/1.65 -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+    main { max-width: 760px; margin: 0 auto; padding: 48px 20px 80px; }
+    h1 { color: #f0f6fc; font-size: 28px; margin: 0 0 4px; }
+    h2 { color: #f0f6fc; font-size: 18px; margin: 32px 0 8px; }
+    .meta { color: #8b949e; font-size: 13px; margin-bottom: 28px; }
+    code { background: #161b22; border: 1px solid #30363d; border-radius: 4px; padding: 1px 6px; font-size: 13px; color: #79c0ff; }
+    a { color: #58a6ff; }
+    ul { padding-left: 22px; }
+    li { margin: 6px 0; }
+    .box { background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 14px 18px; }
+  </style>
+</head>
+<body>
+<main>
+  <h1>RTDB Tree Editor — Privacy Policy</h1>
+  <div class="meta">Effective October 28, 2026</div>
+
+  <div class="box">
+    <b>In short:</b> the extension does not collect, sell or share your data. It talks only to the
+    Firebase Realtime Database you open in the Firebase console, using your own console session, and
+    keeps everything else on your computer.
+  </div>
+
+  <h2>What the extension does</h2>
+  <p>RTDB Tree Editor adds a <b>Tree editor</b> tab to the Realtime Database section of the Firebase
+  console (<code>console.firebase.google.com</code>). It reads the data at the path you are viewing,
+  lets you edit it as a tree, and writes it back when you click <b>Publish</b>.</p>
+
+  <h2>Information the extension handles</h2>
+  <ul>
+    <li><b>Your Firebase console session credential.</b> To read and write your database with exactly the
+      permissions you already have in the console, the extension picks up the access credential that the
+      console itself sends to Realtime Database (<code>*.firebaseio.com</code> /
+      <code>*.firebasedatabase.app</code>). It only looks at traffic to those database hosts. The credential
+      is kept in the browser's memory (<code>chrome.storage.session</code>), is cleared when the browser
+      closes, and is sent <b>only</b> to the Realtime Database you are editing.</li>
+    <li><b>Your database content.</b> Data at the path you open is loaded into the editor so you can work
+      with it. It is sent back only to that same database, and only when you publish.</li>
+    <li><b>Rollback snapshots.</b> Before each publish, the previous data at that path is saved in the
+      extension's local storage (<code>chrome.storage.local</code>) on your computer so you can roll back.
+      You can delete snapshots at any time from <b>History</b>, or by removing the extension.</li>
+    <li><b>Preferences.</b> Settings such as whether auto-sync is on are stored locally.</li>
+  </ul>
+
+  <h2>What the extension does not do</h2>
+  <ul>
+    <li>It does not send any data to the developer or to any third-party server.</li>
+    <li>It has no analytics, tracking, advertising or remote code.</li>
+    <li>It does not sell, rent or transfer your data, and does not use it for any purpose other than the
+      editing features described above.</li>
+    <li>It does not read other websites; it only runs on the Firebase console and only contacts Realtime
+      Database hosts.</li>
+  </ul>
+
+  <h2>Chrome Web Store User Data Policy</h2>
+  <p>The use of information received by this extension adheres to the
+    <a href="https://developer.chrome.com/docs/webstore/program-policies/user-data-faq">Chrome Web Store User Data Policy</a>,
+    including the Limited Use requirements.</p>
+
+  <h2>Changes</h2>
+  <p>If this policy changes, the updated version will be published on this page with a new effective date.</p>
+
+  <h2>Contact</h2>
+  <p>Questions or concerns: <a href="https://github.com/SysCall97/JSON-Differ/issues">open an issue on GitHub</a>.</p>
+</main>
+</body>
+</html>
