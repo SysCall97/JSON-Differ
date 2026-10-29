@@ -1,0 +1,44 @@
+{
+  "name": "json-tree-editor",
+  "displayName": "JSON Tree Editor",
+  "description": "Edit JSON files as a tree: add, duplicate, remove, rename, drag to reorder, fold — with VS Code's own save and undo.",
+  "version": "0.1.0",
+  "publisher": "syscall97",
+  "license": "MIT",
+  "icon": "media/icon.png",
+  "repository": { "type": "git", "url": "https://github.com/SysCall97/JSON-Differ" },
+  "bugs": { "url": "https://github.com/SysCall97/JSON-Differ/issues" },
+  "homepage": "https://github.com/SysCall97/JSON-Differ/tree/main/vscode-extension#readme",
+  "engines": { "vscode": "^1.85.0" },
+  "categories": ["Visualization", "Other"],
+  "keywords": ["json", "tree", "editor", "visual", "config", "firebase"],
+  "main": "./extension.js",
+  "activationEvents": [],
+  "contributes": {
+    "customEditors": [
+      {
+        "viewType": "jsonTreeEditor.tree",
+        "displayName": "JSON Tree",
+        "selector": [{ "filenamePattern": "*.json" }],
+        "priority": "option"
+      }
+    ],
+    "commands": [
+      { "command": "jsonTreeEditor.openAsTree", "title": "Open as JSON Tree", "category": "JSON Tree", "icon": "$(list-tree)" },
+      { "command": "jsonTreeEditor.openAsText", "title": "Open as Text", "category": "JSON Tree", "icon": "$(go-to-file)" }
+    ],
+    "menus": {
+      "editor/title": [
+        { "command": "jsonTreeEditor.openAsTree", "when": "resourceExtname == .json && activeEditor == workbench.editors.files.textFileEditor", "group": "navigation" },
+        { "command": "jsonTreeEditor.openAsText", "when": "activeCustomEditorId == jsonTreeEditor.tree", "group": "navigation" }
+      ],
+      "explorer/context": [
+        { "command": "jsonTreeEditor.openAsTree", "when": "resourceExtname == .json", "group": "navigation@9" }
+      ],
+      "commandPalette": [
+        { "command": "jsonTreeEditor.openAsTree", "when": "resourceExtname == .json" },
+        { "command": "jsonTreeEditor.openAsText", "when": "activeCustomEditorId == jsonTreeEditor.tree" }
+      ]
+    }
+  }
+}
