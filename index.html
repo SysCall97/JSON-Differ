@@ -453,6 +453,11 @@
     .btn-ext { background: #1f6feb; }
     .btn-ext:hover { background: #388bfd; }
     .btn-sm { padding: 4px 10px; font-size: 12px; }
+    .btn-vscode { background: #0065a9; }
+    .btn-vscode:hover { background: #007acc; }
+    .guide-sub { font-size: 14px; color: #f0f6fc; margin: 18px 0 6px; font-weight: 600; }
+    .guide-sub:first-of-type { margin-top: 6px; }
+    .guide-sub span { color: #8b949e; font-weight: 400; }
     @media (max-width: 760px) {
       .header { flex-wrap: wrap; gap: 10px; }
       .ext-actions { border-left: none; padding-left: 0; }
@@ -495,7 +500,8 @@
       </div>
       <div class="ext-actions">
         <a class="btn btn-ext" id="extStore" href="https://chromewebstore.google.com/detail/rtdb-tree-editor/jhaiapddcbedapdpbghcbcdnfnfdhfbf" target="_blank" rel="noopener" title="Get RTDB Tree Editor from the Chrome Web Store">Add to Chrome</a>
-        <button class="btn btn-secondary" onclick="openGuide()" title="What the extension does and how to use it">How it works</button>
+        <a class="btn btn-vscode" id="extVscode" href="https://marketplace.visualstudio.com/items?itemName=syscall97.json-tree-editor" target="_blank" rel="noopener" title="Get JSON Tree Editor Plus for VS Code">Get for VS Code</a>
+        <button class="btn btn-secondary" onclick="openGuide()" title="What the extensions do and how to use them">How it works</button>
       </div>
     </div>
   </div>
@@ -503,9 +509,10 @@
   <div class="guide-backdrop" id="guide" hidden onclick="if (event.target === this) closeGuide()">
     <div class="guide" role="dialog" aria-modal="true" aria-labelledby="guideTitle">
       <div class="guide-head">
-        <h2 id="guideTitle">RTDB Tree Editor for Chrome</h2>
+        <h2 id="guideTitle">Tree editor extensions</h2>
         <button class="guide-close" onclick="closeGuide()" aria-label="Close">✕</button>
       </div>
+      <h3 class="guide-sub">RTDB Tree Editor <span>· Chrome</span></h3>
       <p class="guide-intro">Adds a <b>Tree editor</b> tab to Realtime Database in the Firebase console, so you can edit data as a tree — add, duplicate, reorder, live sync — and publish it back. Works in Chrome, Edge, Brave and other Chromium browsers.</p>
       <ol class="guide-steps">
         <li>
@@ -518,6 +525,16 @@
       <div class="guide-note">
         <b>Updates</b> install automatically from the Chrome Web Store. Your edits are only written when you click <b>Publish</b>, and every publish can be rolled back from <b>History</b>.
       </div>
+
+      <h3 class="guide-sub">JSON Tree Editor Plus <span>· VS Code</span></h3>
+      <p class="guide-intro">The same tree editor for <code>.json</code> files in VS Code — add, duplicate, rename, drag to reorder — with VS Code's own save, undo and Git.</p>
+      <ol class="guide-steps">
+        <li>
+          <b>Install it from the VS Code Marketplace</b> (or search “JSON Tree Editor Plus” in the Extensions view).
+          <div class="guide-row"><a class="btn btn-vscode" href="https://marketplace.visualstudio.com/items?itemName=syscall97.json-tree-editor" target="_blank" rel="noopener">Open in VS Code Marketplace</a></div>
+        </li>
+        <li><b>Open a <code>.json</code> file</b> and click the tree icon in the editor's top-right, or right-click the file → <b>Open as JSON Tree</b>.</li>
+      </ol>
     </div>
   </div>
 

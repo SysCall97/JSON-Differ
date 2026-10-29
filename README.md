@@ -24,6 +24,12 @@ Edit Firebase Realtime Database data as a tree right inside the Firebase console
 
 **[Install from the Chrome Web Store](https://chromewebstore.google.com/detail/rtdb-tree-editor/jhaiapddcbedapdpbghcbcdnfnfdhfbf)** · Source and details: [`extension/`](extension/README.md)
 
+## VS Code Extension: JSON Tree Editor Plus
+
+The same tree editor for `.json` files in VS Code — add, duplicate, rename, drag to reorder — with VS Code's own save, undo and Git.
+
+**[Install from the VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=syscall97.json-tree-editor)** · Source: [`vscode-extension/`](vscode-extension/README.md)
+
 ---
 
 ## Quick Install (Claude Code Skill)

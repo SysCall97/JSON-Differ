@@ -1,4 +1,4 @@
-# JSON Tree Editor
+# JSON Tree Editor Plus
 
 Edit `.json` files in VS Code as a tree — the same editor as the
 [RTDB Tree Editor](https://chromewebstore.google.com/detail/rtdb-tree-editor/jhaiapddcbedapdpbghcbcdnfnfdhfbf) Chrome extension.
