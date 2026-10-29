@@ -15,13 +15,19 @@ Adds a **Tree editor** tab to Realtime Database in the Firebase console, next to
 
 ## Install
 
+Install from the Chrome Web Store: **[RTDB Tree Editor](https://chromewebstore.google.com/detail/rtdb-tree-editor/jhaiapddcbedapdpbghcbcdnfnfdhfbf)** → **Add to Chrome**. Updates install automatically.
+
+Then reload any Firebase console tabs that were already open. There's no sign-in or setup.
+
+<details>
+<summary>Developers: load from source</summary>
+
 1. Open `chrome://extensions` and turn on **Developer mode** (top right).
 2. Click **Load unpacked** and select this `extension` folder.
-3. Reload any Firebase console tabs that were already open.
+3. After changing files, click the reload icon on the extension's card, then reload the console tab.
 
-After updating the extension's files, click the reload icon on its card in `chrome://extensions`, then reload the console tab.
-
-That's it. There's no OAuth client or sign-in to set up.
+Only one copy should be enabled at a time — disable the store version while testing a local one.
+</details>
 
 ## Usage
 

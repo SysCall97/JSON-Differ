@@ -18,6 +18,14 @@ A visual JSON comparison tool with side-by-side diff view, foldable JSON trees, 
 
 ---
 
+## Chrome Extension: RTDB Tree Editor
+
+Edit Firebase Realtime Database data as a tree right inside the Firebase console — add, duplicate, drag to reorder, live sync, publish and roll back.
+
+**[Install from the Chrome Web Store](https://chromewebstore.google.com/detail/rtdb-tree-editor/jhaiapddcbedapdpbghcbcdnfnfdhfbf)** · Source and details: [`extension/`](extension/README.md)
+
+---
+
 ## Quick Install (Claude Code Skill)
 
 ```bash
