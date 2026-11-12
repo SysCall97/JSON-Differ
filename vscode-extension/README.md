@@ -11,6 +11,7 @@ Edit `.json` files in VS Code as a tree — the same editor as the
 - **Remove** nodes (**−**), with a short animation so you can see what changed
 - **Rename keys and edit values inline** — click a key or value; type `42`, `true`, `null`, `"text"`, `{}` or `[]`
 - **Drag to reorder** array items (⠿ handle), with edge auto-scroll
+- **Find & replace** (Ctrl/⌘+F) — substring search in values and/or keys, match case, step through matches, replace one or all
 - **Fold / unfold** nodes, or Expand all / Collapse all
 
 It's a normal VS Code editor for the file: **Save**, the unsaved dot, **Undo/Redo** (Ctrl/⌘+Z),

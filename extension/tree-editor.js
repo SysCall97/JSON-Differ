@@ -20,6 +20,7 @@ export class TreeEditor {
    *   onChange()                       called after every change (incl. undo/redo)
    *   onError(msg)                     validation errors (e.g. duplicate key)
    *   onToast(html, color, action)     change notifications
+   *   firebaseKeys (default true)      reject keys with . # $ [ ] / (Firebase rules)
    */
   constructor(view, opts = {}) {
     this.view = view;
@@ -92,12 +93,17 @@ export class TreeEditor {
     const lines = [];
     this.nodes = [];
 
-    const prim = (v, id) => {
+    const fr = this._prepareSearch();
+    const hit = (path, kind) => (fr ? fr.map.get(JSON.stringify(path) + '|' + kind) : undefined);
+    const hitCls = (i) => (i === undefined ? '' : i === fr.cur ? ' t-match t-match-cur' : ' t-match');
+    const prim = (v, id, path) => {
       const attr = `data-edit="value" data-node="${id}" title="Click to edit"`;
-      if (typeof v === 'string') return `<span class="t-str t-edit" ${attr}>${esc(JSON.stringify(v))}</span>`;
-      if (typeof v === 'number') return `<span class="t-num t-edit" ${attr}>${v}</span>`;
       if (isObj(v)) return `<span class="t-edit" ${attr}>${Array.isArray(v) ? '[]' : '{}'}</span>`;
-      return `<span class="t-lit t-edit" ${attr}>${v}</span>`;
+      const i = hit(path, 'value');
+      const display = typeof v === 'string' ? JSON.stringify(v) : String(v);
+      const text = i === undefined ? esc(display) : frHighlight(v, display, fr.opt, typeof v === 'string', esc);
+      const cls = typeof v === 'string' ? 't-str' : typeof v === 'number' ? 't-num' : 't-lit';
+      return `<span class="${cls} t-edit${hitCls(i)}" ${attr}>${text}</span>`;
     };
     const line = (code, gutter = '', btnId = null, handle = '', addId = null) => {
       const add = addId !== null
@@ -114,8 +120,10 @@ export class TreeEditor {
       const node = { path, start: lines.length, end: 0 };
       this.nodes.push(node);
       const indent = '  '.repeat(depth);
+      const ki = typeof key === 'string' ? hit(path, 'key') : undefined;
       const keyHtml = typeof key === 'string'
-        ? `<span class="t-key t-edit" data-edit="key" data-node="${id}" title="Click to rename">${esc(JSON.stringify(key))}</span>: `
+        ? `<span class="t-key t-edit${hitCls(ki)}" data-edit="key" data-node="${id}" title="Click to rename">${
+          ki === undefined ? esc(JSON.stringify(key)) : frHighlight(key, JSON.stringify(key), fr.opt, true, esc)}</span>: `
         : '';
       const comma = isLast ? '' : ',';
       const btnId = path.length ? id : null;
@@ -128,7 +136,7 @@ export class TreeEditor {
         const entries = isArr ? v.map((x, i) => [i, x]) : Object.entries(v);
         const [o, c] = isArr ? ['[', ']'] : ['{', '}'];
         if (entries.length === 0) {
-          line(indent + keyHtml + prim(v, id) + comma, '', btnId, handle, id);
+          line(indent + keyHtml + prim(v, id, path) + comma, '', btnId, handle, id);
         } else if (this.collapsed.has(v)) {
           const label = `${entries.length} ${isArr ? 'item' : 'key'}${entries.length > 1 ? 's' : ''}`;
           line(`${indent}${keyHtml}${o}<span class="t-preview"> … ${label} </span>${c}${comma}`,
@@ -139,7 +147,7 @@ export class TreeEditor {
           line(indent + c + comma, '', btnId, '', id);
         }
       } else {
-        line(indent + keyHtml + prim(v, id) + comma, '', btnId, handle);
+        line(indent + keyHtml + prim(v, id, path) + comma, '', btnId, handle);
       }
       node.end = lines.length - 1;
     };
@@ -152,6 +160,7 @@ export class TreeEditor {
     view.innerHTML = lines.join('');
     view.scrollTop = scroll;
     this._mountAddRow();
+    if (this.opts.onSearch) this.opts.onSearch(this.searchState());
 
     const els = view.querySelectorAll('.t-line');
     if (flashPath) {
@@ -198,6 +207,77 @@ export class TreeEditor {
     this._toast(`Added copy at <code>${esc(pathLabel(newPath))}</code>`, '#3fb950');
   }
 
+  // ---------- find & replace ----------
+  /** Set (or clear with null) the search: { query, caseSensitive, values, keys }. */
+  setSearch(opt) {
+    this.search = opt && opt.query ? { ...opt } : null;
+    this.matchIndex = 0;
+    if (this.search) this._revealCurrent(); else this.render();
+    return this.searchState();
+  }
+
+  searchState() {
+    const count = this.search ? (this.matches || []).length : 0;
+    return { count, index: count ? this.matchIndex : -1 };
+  }
+
+  findStep(dir) {
+    const n = (this.matches || []).length;
+    if (!this.search || !n) return this.searchState();
+    this.matchIndex = (this.matchIndex + dir + n) % n;
+    this._revealCurrent();
+    return this.searchState();
+  }
+
+  replaceCurrent(rep) {
+    const m = this.search && (this.matches || [])[this.matchIndex];
+    if (!m) return this.searchState();
+    return this._replace([m], rep, false);
+  }
+
+  replaceAll(rep) {
+    if (!this.search || !(this.matches || []).length) return this.searchState();
+    return this._replace(this.matches.slice(), rep, true);
+  }
+
+  _replace(list, rep, all) {
+    const keyCheck = this.opts.firebaseKeys !== false ? (k) => /[.#$\[\]\/]/.test(k) : null;
+    const why = keyCheck ? 'empty, duplicate or contain . # $ [ ] /' : 'empty or duplicate';
+    this._pushUndo();
+    const res = frApply(this.root, list, this.search, rep, keyCheck);
+    if (!res.done) {
+      this.undoStack.pop();
+      this._toast(res.skipped ? `Nothing replaced — ${res.skipped} key${res.skipped === 1 ? '' : 's'} would be ${why}.` : 'Nothing to replace.', '#d29922', { label: '', fn: () => {} });
+      return this.searchState();
+    }
+    this.root = res.root;
+    if (all) this.matchIndex = 0;
+    this._revealCurrent();
+    this._changed();
+    const skipped = res.skipped ? ` · ${res.skipped} key${res.skipped === 1 ? '' : 's'} skipped (${why})` : '';
+    this._toast(`Replaced ${res.done} ${all ? `match${res.done === 1 ? '' : 'es'}` : 'match'}${skipped}`, '#58a6ff');
+    return this.searchState();
+  }
+
+  /** Recompute matches, unfold the current match's ancestors, render, scroll to it. */
+  _revealCurrent() {
+    this.matches = frFindMatches(this.root, this.search);
+    const n = this.matches.length;
+    if (this.matchIndex >= n) this.matchIndex = n ? 0 : 0;
+    const m = this.matches[this.matchIndex];
+    if (m) for (let i = 0; i < m.path.length; i++) { const v = this._safeGet(m.path.slice(0, i)); if (isObj(v)) this.collapsed.delete(v); }
+    this.render();
+    if (m) { const node = this._find(m.path); if (node) this._scrollTo(node.start); }
+  }
+
+  _prepareSearch() {
+    if (!this.search) { this.matches = []; return null; }
+    this.matches = frFindMatches(this.root, this.search);
+    if (this.matchIndex >= this.matches.length) this.matchIndex = 0;
+    const map = new Map(this.matches.map((m, i) => [JSON.stringify(m.path) + '|' + m.kind, i]));
+    return { map, opt: this.search, cur: this.matchIndex };
+  }
+
   /** Open the inline "add child" row for the object/array at `path`. */
   startAdd(path) {
     const v = this._get(path);
@@ -226,7 +306,7 @@ export class TreeEditor {
       newPath = [...path, target.length - 1];
     } else {
       if (!key.trim()) return 'Enter a key.';
-      if (/[.#$\[\]\/]/.test(key)) return 'Keys cannot contain . # $ [ ] or /';
+      if (this.opts.firebaseKeys !== false && /[.#$\[\]\/]/.test(key)) return 'Keys cannot contain . # $ [ ] or /';
       if (has(target, key)) return `"${key}" already exists here.`;
       this._pushUndo();
       target[key] = value;
@@ -309,7 +389,7 @@ export class TreeEditor {
     const oldKey = path[path.length - 1];
     if (newKey === oldKey) return this.render();
     if (newKey === '') return this._error('Key cannot be empty.');
-    if (/[.#$\[\]\/]/.test(newKey)) return this._error('Firebase keys cannot contain . # $ [ ] or /');
+    if (this.opts.firebaseKeys !== false && /[.#$\[\]\/]/.test(newKey)) return this._error('Firebase keys cannot contain . # $ [ ] or /');
     const parentPath = path.slice(0, -1);
     const parent = this._get(parentPath);
     if (has(parent, newKey)) return this._error(`Key "${newKey}" already exists here.`);
@@ -781,4 +861,162 @@ export function listChanges(a, b, path = [], out = []) {
   else if (b === undefined || b === null) out.push({ type: 'removed', path, value: a });
   else out.push({ type: 'modified', path, oldValue: a, value: b });
   return out;
+}
+
+// ---------- Find & replace (shared helpers) ----------
+// Matches are per node: { path, kind: 'value' | 'key' }. Values are matched on
+// their text (strings, numbers, booleans, null); keys on the key name.
+function frEscapeRe(s) { return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
+function frRegex(opt) { return new RegExp(frEscapeRe(opt.query), opt.caseSensitive ? 'g' : 'gi'); }
+function frTest(text, opt) { const re = frRegex(opt); return re.test(text); }
+function frReplaceText(text, opt, rep) { return String(text).replace(frRegex(opt), () => rep); }
+
+function frFindMatches(root, opt) {
+  const out = [];
+  if (!opt || !opt.query || root === undefined) return out;
+  const isObj = (v) => v !== null && typeof v === 'object';
+  const walk = (v, path) => {
+    if (!isObj(v)) {
+      if (opt.values && frTest(String(v), opt)) out.push({ path, kind: 'value' });
+      return;
+    }
+    const isArr = Array.isArray(v);
+    for (const [k, x] of (isArr ? v.map((x, i) => [i, x]) : Object.entries(v))) {
+      const p = [...path, k];
+      if (!isArr && opt.keys && frTest(k, opt)) out.push({ path: p, kind: 'key' });
+      walk(x, p);
+    }
+  };
+  walk(root, []);
+  return out;
+}
+
+// Highlight the matched parts of a displayed key/value. `display` is what the tree
+// shows (JSON-quoted for strings). Falls back to plain text when escaping would
+// shift character positions (the whole token is still marked as a match).
+function frHighlight(raw, display, opt, isString, escFn) {
+  const s = String(raw);
+  if (isString && JSON.stringify(s).length !== s.length + 2) return escFn(display);
+  const off = isString ? 1 : 0;
+  const re = frRegex(opt);
+  let out = '', last = 0, m;
+  while ((m = re.exec(s))) {
+    if (!m[0].length) { re.lastIndex++; continue; }
+    const a = m.index + off, b = a + m[0].length;
+    out += escFn(display.slice(last, a)) + '<mark class="t-hit">' + escFn(display.slice(a, b)) + '</mark>';
+    last = b;
+  }
+  return out + escFn(display.slice(last));
+}
+
+// Apply replacements in place. Returns { root, done, skipped }.
+// Values first, then key renames deepest-first so earlier renames don't break later paths.
+function frApply(root, list, opt, rep, keyCheck) {
+  let done = 0, skipped = 0;
+  const getAt = (p) => p.reduce((o, k) => o[k], root);
+  const setAt = (p, v) => { if (!p.length) root = v; else getAt(p.slice(0, -1))[p[p.length - 1]] = v; };
+  for (const m of list.filter((x) => x.kind === 'value')) {
+    const old = getAt(m.path);
+    if (old !== null && typeof old === 'object') continue;
+    const text = frReplaceText(String(old), opt, rep);
+    let nv = text;
+    if (typeof old !== 'string') {          // keep numbers/booleans/null typed when the result still is one
+      try { const p = JSON.parse(text); if (p === null || typeof p !== 'object') nv = p; } catch { /* stays a string */ }
+    }
+    if (nv === old) continue;
+    setAt(m.path, nv);
+    done++;
+  }
+  const keys = list.filter((x) => x.kind === 'key').sort((a, b) => b.path.length - a.path.length);
+  for (const m of keys) {
+    const parentPath = m.path.slice(0, -1);
+    const parent = getAt(parentPath);
+    const oldKey = m.path[m.path.length - 1];
+    const newKey = frReplaceText(oldKey, opt, rep);
+    if (newKey === oldKey) continue;
+    if (!newKey || Object.prototype.hasOwnProperty.call(parent, newKey) || (keyCheck && keyCheck(newKey))) { skipped++; continue; }
+    const rebuilt = {};
+    for (const k of Object.keys(parent)) rebuilt[k === oldKey ? newKey : k] = parent[k];
+    setAt(parentPath, rebuilt);
+    done++;
+  }
+  return { root, done, skipped };
+}
+
+// The find/replace bar. `target` implements:
+//   setSearch(opt|null) → {count, index}, findStep(dir), replaceCurrent(rep), replaceAll(rep)
+export function createFindBar(target, { onClose } = {}) {
+  const el = document.createElement('div');
+  el.className = 'fr-bar';
+  el.hidden = true;
+  el.innerHTML = `
+    <div class="fr-row">
+      <input class="fr-input fr-find" placeholder="Find" spellcheck="false" aria-label="Find">
+      <button class="fr-toggle fr-case" title="Match case" aria-pressed="false">Aa</button>
+      <label class="fr-check" title="Search in values"><input type="checkbox" class="fr-values" checked> Values</label>
+      <label class="fr-check" title="Search in key names"><input type="checkbox" class="fr-keys"> Keys</label>
+      <span class="fr-count"></span>
+      <button class="fr-btn fr-prev" title="Previous match (Shift+Enter)" aria-label="Previous match">↑</button>
+      <button class="fr-btn fr-next" title="Next match (Enter)" aria-label="Next match">↓</button>
+      <button class="fr-btn fr-close" title="Close (Esc)" aria-label="Close">✕</button>
+    </div>
+    <div class="fr-row">
+      <input class="fr-input fr-rep" placeholder="Replace" spellcheck="false" aria-label="Replace">
+      <button class="fr-btn fr-one" title="Replace this match (Enter)">Replace</button>
+      <button class="fr-btn fr-all" title="Replace all matches (Ctrl/⌘+Enter)">Replace all</button>
+    </div>`;
+  const q = (c) => el.querySelector(c);
+  const find = q('.fr-find'), rep = q('.fr-rep');
+  let caseSensitive = false, timer = 0, state = { count: 0, index: -1 };
+
+  const opts = () => ({ query: find.value, caseSensitive, values: q('.fr-values').checked, keys: q('.fr-keys').checked });
+  const run = () => { update(target.setSearch(find.value ? opts() : null)); };
+  const schedule = () => { clearTimeout(timer); timer = setTimeout(run, 120); };
+
+  function update(s) {
+    state = s || { count: 0, index: -1 };
+    const o = opts();
+    q('.fr-count').textContent = !o.query ? '' : (!o.values && !o.keys) ? 'Pick Values or Keys'
+      : state.count ? `${state.index + 1} of ${state.count}` : 'No results';
+    q('.fr-count').classList.toggle('none', !!o.query && !state.count);
+    for (const c of ['.fr-prev', '.fr-next', '.fr-one', '.fr-all']) q(c).disabled = !state.count;
+  }
+
+  find.addEventListener('input', schedule);
+  q('.fr-values').addEventListener('change', run);
+  q('.fr-keys').addEventListener('change', run);
+  q('.fr-case').addEventListener('click', () => {
+    caseSensitive = !caseSensitive;
+    q('.fr-case').classList.toggle('on', caseSensitive);
+    q('.fr-case').setAttribute('aria-pressed', String(caseSensitive));
+    run();
+  });
+  q('.fr-prev').addEventListener('click', () => update(target.findStep(-1)));
+  q('.fr-next').addEventListener('click', () => update(target.findStep(1)));
+  q('.fr-one').addEventListener('click', () => update(target.replaceCurrent(rep.value)));
+  q('.fr-all').addEventListener('click', () => update(target.replaceAll(rep.value)));
+  q('.fr-close').addEventListener('click', () => close());
+  el.addEventListener('keydown', (e) => {
+    e.stopPropagation();                       // keep tree/host shortcuts out of the inputs
+    if (e.key === 'Escape') { e.preventDefault(); close(); return; }
+    if (e.key !== 'Enter') return;
+    e.preventDefault();
+    if (e.target === find) { clearTimeout(timer); if (!state.count) run(); update(target.findStep(e.shiftKey ? -1 : 1)); }
+    else if (e.target === rep) update((e.metaKey || e.ctrlKey) ? target.replaceAll(rep.value) : target.replaceCurrent(rep.value));
+  });
+
+  function open(focusReplace = false) {
+    el.hidden = false;
+    const input = focusReplace && find.value ? rep : find;
+    input.focus();
+    input.select();
+    if (find.value) run();
+  }
+  function close() {
+    el.hidden = true;
+    clearTimeout(timer);
+    update(target.setSearch(null));
+    onClose && onClose();
+  }
+  return { el, open, close, update, get isOpen() { return !el.hidden; } };
 }

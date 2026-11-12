@@ -70,10 +70,12 @@ class JsonTreeEditorProvider {
   <div class="bar">
     <span class="info" id="info"></span>
     <span class="spacer"></span>
+    <button id="findBtn" title="Find and replace in keys and values (Ctrl/⌘+F)">Find</button>
     <button id="expandAll" title="Unfold every node">Expand all</button>
     <button id="collapseAll" title="Fold every node">Collapse all</button>
     <button id="openText" title="Reopen this file in the normal text editor">Open as Text</button>
   </div>
+  <div id="frHost"></div>
   <div class="banner" id="banner"><span id="bannerText"></span><button id="bannerClose">OK</button></div>
   <div id="tree"></div>
   <div class="invalid" id="invalid">

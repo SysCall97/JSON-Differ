@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "RTDB Tree Editor",
-  "version": "1.7.1",
+  "version": "1.8.0",
   "description": "Edit Firebase Realtime Database data as a tree right in the console: add, duplicate, reorder, live sync, publish and roll back.",
   "homepage_url": "https://syscall97.github.io/JSON-Differ/",
   "icons": {

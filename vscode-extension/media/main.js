@@ -2,7 +2,7 @@
 // The text document (owned by VS Code) is the source of truth: every tree edit
 // is sent to the extension as the new file text, and every document change
 // (typing in a text editor, VS Code undo/redo, git checkout) comes back here.
-import { TreeEditor } from './tree-editor.js';
+import { TreeEditor, createFindBar } from './tree-editor.js';
 
 const vscode = acquireVsCodeApi();
 const $ = (id) => document.getElementById(id);
@@ -149,6 +149,17 @@ function setAllFolded(folded) {
   if (folded && tree.value && typeof tree.value === 'object') tree.collapsed.delete(tree.value); // keep the root open
   tree.render();
 }
+
+// Find & replace (Ctrl/⌘+F, Ctrl/⌘+H)
+const findBar = createFindBar(tree);
+$('frHost').replaceWith(findBar.el);
+tree.opts.onSearch = (s) => findBar.update(s);
+$('findBtn').addEventListener('click', () => (findBar.isOpen ? findBar.close() : findBar.open()));
+document.addEventListener('keydown', (e) => {
+  if (!(e.metaKey || e.ctrlKey) || e.altKey) return;
+  const k = e.key.toLowerCase();
+  if (k === 'f' || k === 'h') { e.preventDefault(); findBar.open(k === 'h'); }
+});
 
 $('expandAll').addEventListener('click', () => setAllFolded(false));
 $('collapseAll').addEventListener('click', () => setAllFolded(true));

@@ -6,6 +6,7 @@ Adds a **Tree editor** tab to Realtime Database in the Firebase console, next to
 - In the tree editor you can:
   - Add a child to an object or array (**+**), duplicate a node as its next sibling (**⧉**), or remove it (**−**).
   - Reorder array items by dragging an item's **⠿** handle up or down within its array.
+  - Find & replace (**Find** or ⌘/Ctrl+F): substring search in values and/or keys, match case, replace one or all.
   - Click a key or value to edit it.
   - Fold nodes, use undo/redo, switch to Text mode, and upload or download JSON.
 - **Publish** shows a preview of the changes, then writes the JSON back to that path. The console updates live.

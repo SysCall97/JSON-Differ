@@ -1,4 +1,4 @@
-import { TreeEditor, listChanges, pathLabel } from './tree-editor.js';
+import { TreeEditor, listChanges, pathLabel, createFindBar } from './tree-editor.js';
 
 // The editor UI, mounted inside a shadow root on the Firebase console page
 // (so the console's CSS and ours don't affect each other).
@@ -29,6 +29,7 @@ const TEMPLATE = `<div class="rte-root" tabindex="-1">
       <button class="sync-chip" id="syncChip" title="Auto-sync: click to turn on/off"><span class="dot"></span><span id="syncText">Auto-sync off</span></button>
     </div>
     <div class="actions">
+      <button class="file-btn" id="findBtn" title="Find and replace in keys and values (⌘/Ctrl+F)">Find</button>
       <button class="file-btn" id="undoBtn" title="Undo (⌘/Ctrl+Z)" disabled>↶ Undo</button>
       <button class="file-btn" id="redoBtn" title="Redo (⇧⌘Z / Ctrl+Y)" disabled>↷ Redo</button>
       <div class="mode-toggle">
@@ -44,6 +45,7 @@ const TEMPLATE = `<div class="rte-root" tabindex="-1">
     </div>
   </div>
 
+  <div id="frHost"></div>
   <div class="notice" id="notice" hidden><span id="noticeText"></span><button class="file-btn" id="noticeLoad">Load latest (discard my edits)</button><button class="file-btn" id="noticeDismiss">Keep editing</button></div>
   <div class="error" id="error"><span id="errorText"></span><button class="file-btn" id="errorAction" hidden></button><button class="file-btn" id="errorDetails" hidden>Copy details</button></div>
 
@@ -110,6 +112,12 @@ const state = {
 };
 
 let tree;
+let findBar;
+
+function openFind(replace) {
+  if (state.mode === 'text') setMode('tree');      // search works on the tree
+  findBar.open(replace);
+}
 
 // ---------- Location helpers ----------
 function normalizeDb(url) {
@@ -681,6 +689,12 @@ export function mount(shadowRoot) {
   });
   tree.load(undefined);
 
+  // Find & replace (⌘/Ctrl+F, ⌘/Ctrl+H)
+  findBar = createFindBar(tree);
+  $('frHost').replaceWith(findBar.el);
+  tree.opts.onSearch = (s) => findBar.update(s);
+  $('findBtn').addEventListener('click', () => (findBar.isOpen ? findBar.close() : openFind(false)));
+
   // ---------- Wiring ----------
   $('fetchBtn').addEventListener('click', () => {
     const loc = currentLocation(), loaded = state.loadedFrom;
@@ -752,6 +766,7 @@ export function mount(shadowRoot) {
     if (!(e.metaKey || e.ctrlKey)) return;
     const k = e.key.toLowerCase();
     if (k === 's') { e.preventDefault(); openPublish(); return; }
+    if ((k === 'f' || k === 'h') && !e.altKey) { e.preventDefault(); openFind(k === 'h'); return; }
     const target = e.composedPath()[0];
     if (state.mode !== 'tree' || (target.closest && target.closest('input, textarea'))) return;
     if (k === 'z' && !e.shiftKey) { e.preventDefault(); tree.undo(); }

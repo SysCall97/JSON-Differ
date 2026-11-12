@@ -206,3 +206,39 @@ body {
 }
 .toast code { color: var(--vscode-textLink-foreground); font-family: var(--vscode-editor-font-family); }
 .toast button { color: var(--vscode-textLink-foreground); }
+/* Find & replace */
+.fr-bar { display: flex; flex-direction: column; gap: 6px; padding: 8px 12px; border-bottom: 1px solid #30363d; background: #161b22; }
+.fr-bar[hidden] { display: none; }
+.fr-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.fr-input {
+  flex: 0 1 260px; min-width: 140px; height: 26px; background: #0d1117; color: #c9d1d9; border: 1px solid #30363d;
+  border-radius: 4px; padding: 0 8px; font: 12px 'SF Mono', Monaco, Menlo, monospace; outline: none;
+}
+.fr-input:focus { border-color: #58a6ff; }
+.fr-btn, .fr-toggle {
+  height: 26px; min-width: 26px; padding: 0 8px; background: #21262d; border: 1px solid #30363d; color: #c9d1d9;
+  border-radius: 4px; cursor: pointer; font-size: 12px; font-family: inherit;
+}
+.fr-btn:hover:not(:disabled), .fr-toggle:hover { background: #30363d; }
+.fr-btn:disabled { opacity: 0.4; cursor: default; }
+.fr-toggle.on { background: #1f6feb; border-color: #1f6feb; color: #fff; }
+.fr-check { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; color: #8b949e; cursor: pointer; user-select: none; }
+.fr-count { font-size: 12px; color: #8b949e; min-width: 72px; }
+.fr-count.none { color: #f85149; }
+.t-match { background: rgba(210,153,34,0.18); border-radius: 3px; }
+.t-match-cur { outline: 1px solid #d29922; outline-offset: 1px; background: rgba(210,153,34,0.32); }
+mark.t-hit { background: rgba(210,153,34,0.55); color: inherit; border-radius: 2px; padding: 0; }
+.t-match-cur mark.t-hit { background: #d29922; color: #0d1117; }
+/* Find & replace — VS Code theme */
+.fr-bar { background: var(--vscode-editorWidget-background, #252526); border-bottom: 1px solid var(--vscode-editorWidget-border, rgba(128,128,128,0.35)); }
+.fr-input { background: var(--vscode-input-background); color: var(--vscode-input-foreground); border-color: var(--vscode-input-border, transparent); font-family: var(--vscode-editor-font-family); }
+.fr-input:focus { border-color: var(--vscode-focusBorder); }
+.fr-btn, .fr-toggle { background: var(--vscode-button-secondaryBackground); color: var(--vscode-button-secondaryForeground); border-color: transparent; }
+.fr-btn:hover:not(:disabled), .fr-toggle:hover { background: var(--vscode-button-secondaryHoverBackground); }
+.fr-toggle.on { background: var(--vscode-inputOption-activeBackground, #007fd4); border-color: var(--vscode-inputOption-activeBorder, #007fd4); color: var(--vscode-inputOption-activeForeground, #fff); }
+.fr-check, .fr-count { color: var(--vscode-descriptionForeground); }
+.fr-count.none { color: var(--vscode-errorForeground); }
+.t-match { background: var(--vscode-editor-findMatchHighlightBackground, rgba(234,92,0,0.33)); }
+.t-match-cur { background: var(--vscode-editor-findMatchHighlightBackground, rgba(234,92,0,0.33)); outline-color: var(--vscode-editor-findMatchBorder, var(--vscode-focusBorder)); }
+mark.t-hit { background: var(--vscode-editor-findMatchHighlightBackground, rgba(234,92,0,0.5)); }
+.t-match-cur mark.t-hit { background: var(--vscode-editor-findMatchBackground, #515c6a); color: inherit; }
